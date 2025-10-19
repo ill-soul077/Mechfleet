@@ -18,7 +18,8 @@
 -- =====================================================================
 -- DATABASE CREATION (optional - uncomment if needed)
 -- =====================================================================
-CREATE DATABASE IF NOT EXISTS mechfleet CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+-- MariaDB 10.4 compatible collation (use utf8mb4_unicode_ci instead of MySQL 8's utf8mb4_0900_ai_ci)
+CREATE DATABASE IF NOT EXISTS mechfleet CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE mechfleet;
 
 -- =====================================================================
@@ -89,7 +90,7 @@ CREATE TABLE vehicle (
   CONSTRAINT fk_vehicle_customer FOREIGN KEY (customer_id)
     REFERENCES customer(customer_id)
     ON UPDATE CASCADE
-    ON DELETE RESTRICT COMMENT 'Cannot delete customer with vehicles',
+    ON DELETE RESTRICT,
   CONSTRAINT uq_vehicle_vin UNIQUE (vin),
   CONSTRAINT chk_vehicle_year CHECK (year >= 1900 AND year <= 2100),
   CONSTRAINT chk_vehicle_mileage CHECK (mileage >= 0)
@@ -114,7 +115,7 @@ CREATE TABLE mechanics (
   CONSTRAINT fk_mechanics_manager FOREIGN KEY (managed_by)
     REFERENCES manager(manager_id)
     ON UPDATE CASCADE
-    ON DELETE SET NULL COMMENT 'Set NULL if manager is deleted',
+    ON DELETE SET NULL,
   UNIQUE KEY uq_mechanics_email (email),
   CONSTRAINT chk_mechanics_rate CHECK (hourly_rate >= 0)
 ) ENGINE=InnoDB COMMENT='Mechanics who perform service work';
@@ -224,7 +225,7 @@ CREATE TABLE work_parts (
   CONSTRAINT fk_workparts_work FOREIGN KEY (work_id)
     REFERENCES working_details(work_id)
     ON UPDATE CASCADE
-    ON DELETE CASCADE COMMENT 'Delete parts records if work order deleted',
+    ON DELETE CASCADE,
   CONSTRAINT fk_workparts_product FOREIGN KEY (product_id)
     REFERENCES product_details(product_id)
     ON UPDATE CASCADE
