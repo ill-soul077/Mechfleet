@@ -22,6 +22,11 @@ Requirements:
 2. Import schema and seed data:
   - In phpMyAdmin, select `mechfleet` → Import → Choose file `sql/ddl.sql` → Go
   - Then Import → Choose file `sql/dml_seed.sql` → Go
+    - This seed file uses large multi-row INSERTs and MySQL-compatible number generators (no stored procedures, no CTE inserts) to create:
+      - 5 managers, 50 customers, ~70 vehicles, 10 mechanics
+      - 12 services, 40 products
+      - 100 work orders (`working_details`), 250 `work_parts`, 120 `income`
+    - If import times out in phpMyAdmin, retry or use the MySQL client.
 3. Configure DB connection (optional, defaults shown):
    - `DB_HOST=127.0.0.1`
    - `DB_PORT=3306`
@@ -43,3 +48,4 @@ On XAMPP, you can configure DB credentials directly in `includes/db.php` or set 
 - Prepared statements are used for any user input.
 - All SQL files contain comments describing the SQL concepts they demonstrate.
 - No stored procedures or non-SQL procedural code is used in the SQL files.
+ - Seed data dates are relative to `CURDATE()` so they look fresh whenever you import.
