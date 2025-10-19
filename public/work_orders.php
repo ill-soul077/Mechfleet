@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/util.php';
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/business.php';
 auth_require_login();
 
 $action = $_POST['action'] ?? '';
@@ -36,6 +37,10 @@ try {
     $notes = trim($_POST['notes'] ?? '');
     $stmt = $pdo->prepare('UPDATE working_details SET status=:st, completion_date=:cd, notes=:n WHERE work_id=:id');
     $stmt->execute([':st'=>$status, ':cd'=>$completion_date, ':n'=>$notes, ':id'=>$work_id]);
+    // If marked completed, snapshot invoice totals now
+    if ($status === 'completed') {
+      createInvoiceForWork($pdo, $work_id);
+    }
     $msg = 'Work order updated';
   }
 } catch (Throwable $t) { $err = $t->getMessage(); }

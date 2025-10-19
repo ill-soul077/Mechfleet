@@ -104,6 +104,9 @@ require __DIR__ . '/header.php';
                   <input type="hidden" name="product_id" value="<?= e((string)$r['product_id']) ?>" />
                   <button type="submit">Delete</button>
                 </form>
+                <?php if ($low): ?>
+                  <a href="#" style="margin-left:.5rem;color:#856404;font-weight:bold;">Reorder</a>
+                <?php endif; ?>
               </td>
             </tr>
           <?php endforeach; ?>
