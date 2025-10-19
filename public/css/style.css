@@ -1,16 +1,93 @@
-/* Minimal base styles for Mechfleet */
-:root { --bg: #ffffff; --fg: #111827; --muted: #6b7280; --link: #0a58ca; --border: #e5e7eb; }
-html, body { margin: 0; padding: 0; }
-body { background: var(--bg); color: var(--fg); font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
-a { color: var(--link); text-decoration: none; }
-a:hover { text-decoration: underline; }
-.container { max-width: 1100px; margin: 0 auto; padding: 1rem; }
-header, footer { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: #fafafa; }
-main { padding: 1rem 0; }
-.card { border: 1px solid var(--border); border-radius: 8px; padding: 1rem; background: #fff; }
-.table { width: 100%; border-collapse: collapse; }
-.table th, .table td { border: 1px solid var(--border); padding: .5rem; text-align: left; }
-.table th { background: #f9fafb; }
-.muted { color: var(--muted); }
-.err { color: #b00020; }
-.ok { color: #067d17; }
+/*
+	Mechfleet UI — Raw CSS, no frameworks
+	Colors: primary #0F6DFF, accent #FFB020, neutral #F6F8FB
+	Font: Inter
+*/
+:root{
+	--primary:#0F6DFF;
+	--accent:#FFB020;
+	--neutral:#F6F8FB;
+	--text:#1f2937;
+	--muted:#6b7280;
+	--border:#e5e7eb;
+	--bg:#ffffff;
+	--radius:10px;
+	--shadow:0 6px 18px rgba(15,109,255,0.12);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Helvetica Neue',Arial,sans-serif;color:var(--text);background:var(--neutral)}
+a{color:var(--primary);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* Topbar */
+.topbar{position:sticky;top:0;z-index:1000;display:flex;align-items:center;gap:1rem;justify-content:space-between;padding:.5rem 1rem;background:#fff;border-bottom:1px solid var(--border)}
+.brand{font-weight:700}
+.topnav{display:none;gap:1rem}
+.topbar-actions a{font-weight:500}
+.sidebar-toggle{border:0;background:transparent;font-size:1.25rem;cursor:pointer}
+.sidebar-toggle:focus{outline:2px solid var(--primary);outline-offset:2px}
+
+/* Layout */
+.layout{display:grid;grid-template-columns:260px 1fr;min-height:calc(100vh - 56px)}
+.layout.sidebar-collapsed{grid-template-columns:0 1fr}
+.sidebar{background:#fff;border-right:1px solid var(--border);padding:.75rem;transition:width .25s ease, transform .25s ease}
+.sidebar.collapsed{transform:translateX(-100%);}
+.sidebar-section{display:flex;flex-direction:column}
+.sidebar-link{padding:.5rem .75rem;border-radius:8px;color:inherit}
+.sidebar-link:hover{background:var(--neutral);transform:translateY(-1px);box-shadow:var(--shadow);transition:transform .15s ease, box-shadow .15s ease}
+
+.main{padding:1rem}
+.container{max-width:1200px;margin:0 auto}
+
+/* Cards */
+.card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:1rem;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.card:hover{transform:translateY(-2px);box-shadow:var(--shadow);transition:transform .15s ease, box-shadow .15s ease}
+.grid{display:grid;gap:1rem}
+.grid.cols-3{grid-template-columns:repeat(3,1fr)}
+@media (max-width:1000px){.grid.cols-3{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:700px){.grid.cols-3{grid-template-columns:1fr}}
+
+/* Tables */
+.table{width:100%;border-collapse:separate;border-spacing:0;background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.table thead th{position:sticky;top:0;background:#f9fafb;border-bottom:1px solid var(--border);padding:.5rem;text-align:left}
+.table td{padding:.5rem;border-bottom:1px solid var(--border)}
+.table tr:hover{background:#f8fbff}
+
+/* Buttons */
+button,.btn{display:inline-flex;align-items:center;gap:.5rem;background:var(--primary);color:#fff;border:0;border-radius:8px;padding:.5rem .9rem;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+button.secondary{background:#fff;color:var(--text);border:1px solid var(--border)}
+button.accent{background:var(--accent);color:#1f2937}
+button:disabled{opacity:.6;cursor:not-allowed}
+.btn-spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.6);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Forms */
+label{font-weight:600}
+input,select,textarea{width:100%;padding:.5rem;border:1px solid var(--border);border-radius:8px;background:#fff}
+input:focus,select:focus,textarea:focus{outline:2px solid rgba(15,109,255,.3);border-color:var(--primary)}
+
+/* Modal */
+.modal{display:none;position:fixed;inset:0;background:rgba(10,14,23,.5);align-items:center;justify-content:center;z-index:1100}
+.modal.open{display:flex}
+.modal-card{background:#fff;border-radius:12px;border:1px solid var(--border);box-shadow:var(--shadow);max-width:560px;width:95%;padding:1rem}
+.modal-header{display:flex;justify-content:space-between;align-items:center}
+
+/* Toasts */
+.toast{position:fixed;right:1rem;bottom:1rem;background:#111827;color:#fff;padding:.75rem 1rem;border-radius:10px;box-shadow:var(--shadow);opacity:0;transform:translateY(10px);transition:opacity .2s ease, transform .2s ease;z-index:1200}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.success{background:#10b981}
+.toast.error{background:#ef4444}
+
+/* Skeletons */
+.skeleton{display:block;background:linear-gradient(90deg,#f3f4f6,#eef2f7,#f3f4f6);background-size:200% 100%;animation:skeleton 1.2s ease-in-out infinite;height:1em;border-radius:6px}
+@keyframes skeleton{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* Utility */
+.muted{color:var(--muted)}
+.ok{color:#065f46}
+.err{color:#b91c1c}
+
+/* Responsive */
+@media (min-width:900px){.topnav{display:flex}}
+@media (max-width:900px){.layout{grid-template-columns:0 1fr}.sidebar{position:fixed;left:0;top:56px;bottom:0;width:240px;transform:translateX(-100%)}.sidebar.open{transform:translateX(0)}}

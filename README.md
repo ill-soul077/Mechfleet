@@ -92,3 +92,25 @@ A learning-oriented auto-service management app showcasing SQL and transaction b
 - All interactive pages use prepared statements.
 - DEV_MODE toggles access to dev-only pages and verbose errors.
 - Seed dates are relative to `CURDATE()` so the dataset looks fresh.
+
+## Quick refresh & manual checks
+
+To reset the database quickly using the CLI:
+
+- Windows:
+  - Run `scripts\refresh_db.bat` from the project root in PowerShell or double-click in Explorer.
+- Linux/macOS:
+  - Run `bash scripts/refresh_db.sh` from the project root.
+
+These scripts execute:
+
+- `mysql -u root < sql/ddl.sql`
+- `mysql -u root mechfleet_db < sql/dml_seed.sql`
+
+Then open `public/tests/manual_checks.php` and capture a screenshot showing:
+
+- Total customers
+- Work orders in progress
+- Income last 30 days
+
+Include the timestamp printed at the bottom of the page in your screenshot.
