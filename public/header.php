@@ -25,6 +25,7 @@ require_once __DIR__ . '/../includes/util.php';
   <a href="reports.php">Reports</a>
       <a href="income.php">Payments</a>
       <a href="sql_demos.php">SQL Demos</a>
+  <a href="setops_subqueries.php">Set Ops & Subqueries</a>
     </nav>
     <div>
       <a href="logout.php">Logout</a>
