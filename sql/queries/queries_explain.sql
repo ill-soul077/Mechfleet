@@ -1,15 +1,13 @@
 -- sql/queries/queries_explain.sql
 -- Concepts: EXPLAIN plans, using indexes, checking filter and join strategies
+-- This demo pairs with public/sql_explain_demo.php and shows how adding an index can change the plan.
 
--- EXPLAIN a join that should use FK/PK
-EXPLAIN FORMAT=TRADITIONAL
-SELECT mnt.id, v.vin, v.model
-FROM maintenance mnt
-JOIN vehicles v ON v.id = mnt.vehicle_id
-WHERE v.model LIKE 'Tit%';
+-- BEFORE: Substring search on product_details.product_name forces full scan (index cannot be used for '%q%')
+EXPLAIN SELECT product_id, product_name FROM product_details WHERE product_name LIKE '%filter%';
 
--- EXPLAIN with window function (MySQL will still show plan for underlying scans)
-EXPLAIN
-SELECT vehicle_id, driver_id,
-       ROW_NUMBER() OVER (PARTITION BY vehicle_id ORDER BY starts_at DESC) AS rn
-FROM assignments;
+-- ADD INDEX: This BTREE index can be used for prefix searches (e.g., 'fil%'), reducing examined rows.
+-- Note: It will NOT be used for leading-wildcard patterns ('%fil%').
+CREATE INDEX idx_product_name ON product_details(product_name);
+
+-- AFTER: With a prefix predicate, MySQL can leverage the index (type=range/ref) instead of type=ALL.
+EXPLAIN SELECT product_id, product_name FROM product_details WHERE product_name LIKE 'fil%';
