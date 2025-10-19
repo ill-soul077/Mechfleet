@@ -13,7 +13,7 @@ require __DIR__ . '/header.php';
     <ul>
       <li>PHP: <strong><?= e(PHP_VERSION) ?></strong></li>
       <li>PDO: <?= class_exists('PDO') ? '<span class="ok">available</span>' : '<span class="err">missing</span>' ?></li>
-      <li>DB: Connected to <code><?= e($DB_NAME) ?></code> on <code><?= e($DB_HOST) ?></code></li>
+      <li>DB: Connected to <code><?= e(DB_NAME) ?></code> on <code><?= e(DB_HOST) ?></code></li>
     </ul>
   </div>
 
