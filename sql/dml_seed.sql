@@ -68,6 +68,10 @@ INSERT INTO customer (first_name, last_name, email, phone, address, city, state,
 ('Katherine','Perez','katherine.perez@example.com','555-1048','3333 West Ave','Des Moines','IA','50309'),
 ('Eric','Roberts','eric.roberts@example.com','555-1049','3434 Main St','Oklahoma City','OK','73102');
 
+-- Add one more customer to reach 50 total
+INSERT INTO customer (first_name, last_name, email, phone, address, city, state, zip_code) VALUES
+('Megan','Cooper','megan.cooper@example.com','555-1050','3535 Cedar St','Cincinnati','OH','45202');
+
 -- =====================================================================
 -- DML: Inserting vehicles (~70 rows, linked to customers by pattern)
 -- Pattern: vehicle_id i -> customer_id ((i-1) % 50)+1
