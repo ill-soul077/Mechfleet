@@ -227,7 +227,7 @@ INSERT INTO working_details (
 	status, labor_cost, parts_cost, total_cost, start_date, completion_date, notes
 )
 SELECT
-	(( ((seq.n - 1) % 70) ) % 50) + 1 AS customer_id,
+	(SELECT v.customer_id FROM vehicle v WHERE v.vehicle_id = (((seq.n - 1) % 70) + 1)) AS customer_id,
 	((seq.n - 1) % 70) + 1 AS vehicle_id,
 	((seq.n - 1) % 10) + 1 AS assigned_mechanic_id,
 	((seq.n - 1) % 12) + 1 AS service_id,
