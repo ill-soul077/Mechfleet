@@ -221,71 +221,67 @@ INSERT INTO product_details (sku, product_name, description, unit_price, stock_q
 ('SKU-0039','Wheel Alignment Kit','Shims and hardware',39.99,25,8,'Accessories'),
 ('SKU-0040','Detailing Kit','Wash, wax, interior cleaner',29.99,60,15,'Accessories');
 
--- =====================================================================
--- DML: Inserting working_details (100 rows via CTE; varied status/dates)
--- Notes:
---  - vehicle_id cycles 1..70; customer_id derived by pattern to match vehicles
---  - assigned_mechanic_id cycles 1..10; service_id cycles 1..12
---  - status distributed across completed/in_progress/pending/cancelled
---  - labor_cost derived from service.estimated_hours * mechanic.hourly_rate with variation
--- =====================================================================
-WITH RECURSIVE seq(n) AS (
-	SELECT 1
-	UNION ALL
-	SELECT n + 1 FROM seq WHERE n < 100
-)
+-- Using number generator via user variables and digit tables for MySQL INSERT compatibility
 INSERT INTO working_details (
 	customer_id, vehicle_id, assigned_mechanic_id, service_id,
 	status, labor_cost, parts_cost, total_cost, start_date, completion_date, notes
 )
 SELECT
-	(( ((n - 1) % 70) ) % 50) + 1 AS customer_id,
-	((n - 1) % 70) + 1 AS vehicle_id,
-	((n - 1) % 10) + 1 AS assigned_mechanic_id,
-	((n - 1) % 12) + 1 AS service_id,
+	(( ((seq.n - 1) % 70) ) % 50) + 1 AS customer_id,
+	((seq.n - 1) % 70) + 1 AS vehicle_id,
+	((seq.n - 1) % 10) + 1 AS assigned_mechanic_id,
+	((seq.n - 1) % 12) + 1 AS service_id,
 	CASE
-		WHEN (n % 20) = 0 THEN 'cancelled'
-		WHEN (n % 5) = 4 THEN 'in_progress'
-		WHEN (n % 3) = 0 THEN 'pending'
+		WHEN (seq.n % 20) = 0 THEN 'cancelled'
+		WHEN (seq.n % 5) = 4 THEN 'in_progress'
+		WHEN (seq.n % 3) = 0 THEN 'pending'
 		ELSE 'completed'
 	END AS status,
-	-- labor_cost uses service estimated hours and mechanic rate with a small multiplier
-	ROUND((SELECT sd.estimated_hours FROM service_details sd WHERE sd.service_id = ((n - 1) % 12) + 1)
-				* (SELECT m.hourly_rate FROM mechanics m WHERE m.mechanic_id = ((n - 1) % 10) + 1)
-				* (1.0 + (n % 3) * 0.1), 2) AS labor_cost,
+	ROUND((SELECT sd.estimated_hours FROM service_details sd WHERE sd.service_id = ((seq.n - 1) % 12) + 1)
+				* (SELECT m.hourly_rate FROM mechanics m WHERE m.mechanic_id = ((seq.n - 1) % 10) + 1)
+				* (1.0 + (seq.n % 3) * 0.1), 2) AS labor_cost,
 	0.00 AS parts_cost,
-	ROUND((SELECT sd.estimated_hours FROM service_details sd WHERE sd.service_id = ((n - 1) % 12) + 1)
-				* (SELECT m.hourly_rate FROM mechanics m WHERE m.mechanic_id = ((n - 1) % 10) + 1)
-				* (1.0 + (n % 3) * 0.1), 2) AS total_cost,
-	DATE_SUB(CURDATE(), INTERVAL ((n % 330) + 10) DAY) AS start_date,
+	ROUND((SELECT sd.estimated_hours FROM service_details sd WHERE sd.service_id = ((seq.n - 1) % 12) + 1)
+				* (SELECT m.hourly_rate FROM mechanics m WHERE m.mechanic_id = ((seq.n - 1) % 10) + 1)
+				* (1.0 + (seq.n % 3) * 0.1), 2) AS total_cost,
+	DATE_SUB(CURDATE(), INTERVAL ((seq.n % 330) + 10) DAY) AS start_date,
 	CASE
-		WHEN (n % 20) = 0 THEN NULL
-		WHEN (n % 5) = 4 THEN NULL
-		WHEN (n % 3) = 0 THEN NULL
-		ELSE DATE_SUB(CURDATE(), INTERVAL ((n % 330) + 7) DAY)
+		WHEN (seq.n % 20) = 0 THEN NULL
+		WHEN (seq.n % 5) = 4 THEN NULL
+		WHEN (seq.n % 3) = 0 THEN NULL
+		ELSE DATE_SUB(CURDATE(), INTERVAL ((seq.n % 330) + 7) DAY)
 	END AS completion_date,
-	CONCAT('Seed work #', n) AS notes
-FROM seq;
+	CONCAT('Seed work #', seq.n) AS notes
+FROM (
+	SELECT @n:=@n+1 AS n
+	FROM (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+				UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) d1
+	CROSS JOIN (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+				UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) d2
+	CROSS JOIN (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+				UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) d3
+	CROSS JOIN (SELECT @n:=0) init
+	LIMIT 100
+) AS seq;
 
--- =====================================================================
--- DML: Inserting work_parts (250 rows via CTE; unit_price snapshots)
--- Notes:
---  - work_id cycles across 1..100; product_id cycles across 1..40 skewed by multiplier
---  - quantity varies 1..4; unit_price from product_details at insert time
--- =====================================================================
-WITH RECURSIVE seq(n) AS (
-	SELECT 1
-	UNION ALL
-	SELECT n + 1 FROM seq WHERE n < 250
-)
 INSERT INTO work_parts (work_id, product_id, quantity, unit_price, line_total)
 SELECT
-	((n - 1) % 100) + 1 AS work_id,
-	((n * 7 - 1) % 40) + 1 AS product_id,
-	(n % 4) + 1 AS quantity,
-	(SELECT pd.unit_price FROM product_details pd WHERE pd.product_id = (((n * 7 - 1) % 40) + 1)) AS unit_price,
-	ROUND(((n % 4) + 1) * (SELECT pd.unit_price FROM product_details pd WHERE pd.product_id = (((n * 7 - 1) % 40) + 1)), 2) AS line_total
-FROM seq;
+	((seq.n - 1) % 100) + 1 AS work_id,
+	((seq.n * 7 - 1) % 40) + 1 AS product_id,
+	(seq.n % 4) + 1 AS quantity,
+	(SELECT pd.unit_price FROM product_details pd WHERE pd.product_id = (((seq.n * 7 - 1) % 40) + 1)) AS unit_price,
+	ROUND(((seq.n % 4) + 1) * (SELECT pd.unit_price FROM product_details pd WHERE pd.product_id = (((seq.n * 7 - 1) % 40) + 1)), 2) AS line_total
+FROM (
+	SELECT @n2:=@n2+1 AS n
+	FROM (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+				UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) d1
+	CROSS JOIN (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+				UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) d2
+	CROSS JOIN (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+				UNION ALL SELECT 5) d3
+	CROSS JOIN (SELECT @n2:=0) init
+	LIMIT 250
+) AS seq;
 
 -- After inserting parts, update working_details to reflect parts_cost and total_cost
 UPDATE working_details w
@@ -297,38 +293,37 @@ JOIN (
 SET w.parts_cost = p.parts_total,
 		w.total_cost = ROUND(w.labor_cost + p.parts_total, 2);
 
--- =====================================================================
--- DML: Inserting income (120 rows via CTE; various payment methods)
--- Only for completed work orders; payment_date near completion_date
--- =====================================================================
-WITH RECURSIVE seq(n) AS (
-	SELECT 1
-	UNION ALL
-	SELECT n + 1 FROM seq WHERE n < 120
-),
-completed AS (
-	SELECT work_id, completion_date, total_cost,
-				 ROW_NUMBER() OVER (ORDER BY work_id) AS rn,
-				 COUNT(*) OVER () AS cnt
-	FROM working_details
-	WHERE status = 'completed'
-)
+-- Build a 1..120 row sequence and map across completed works in a round-robin manner
 INSERT INTO income (work_id, amount, tax, payment_method, payment_date, transaction_reference)
 SELECT
 	c.work_id,
 	c.total_cost AS amount,
 	ROUND(c.total_cost * 0.08, 2) AS tax,
-	CASE (s.n % 5)
+	CASE (s.rn % 5)
 		WHEN 0 THEN 'cash'
 		WHEN 1 THEN 'credit_card'
 		WHEN 2 THEN 'debit_card'
 		WHEN 3 THEN 'check'
 		ELSE 'bank_transfer'
 	END AS payment_method,
-	DATE_ADD(c.completion_date, INTERVAL (s.n % 5) DAY) AS payment_date,
-	CONCAT('TX-', LPAD(s.n, 5, '0')) AS transaction_reference
-FROM seq s
-JOIN completed c
-	ON (((s.n - 1) % c.cnt) + 1) = c.rn;
+	DATE_ADD(c.completion_date, INTERVAL (s.rn % 5) DAY) AS payment_date,
+	CONCAT('TX-', LPAD(s.rn, 5, '0')) AS transaction_reference
+FROM (
+	SELECT @i:=@i+1 AS rn
+	FROM (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+				UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) d1
+	CROSS JOIN (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+				UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) d2
+	CROSS JOIN (SELECT @i:=0) init
+	LIMIT 120
+) s
+JOIN (
+	SELECT w.work_id, w.completion_date, w.total_cost,
+				 @r:=@r+1 AS rownum
+	FROM working_details w
+	JOIN (SELECT @r:=0) r
+	WHERE w.status = 'completed'
+	ORDER BY w.work_id
+) c ON (((s.rn - 1) % (SELECT COUNT(*) FROM working_details WHERE status = 'completed')) + 1) = c.rownum;
 
 -- End of seed data
