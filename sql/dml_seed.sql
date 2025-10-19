@@ -270,22 +270,24 @@ FROM (
 
 INSERT INTO work_parts (work_id, product_id, quantity, unit_price, line_total)
 SELECT
-	((seq.n - 1) % 100) + 1 AS work_id,
-	((seq.n * 7 - 1) % 40) + 1 AS product_id,
-	(seq.n % 4) + 1 AS quantity,
-	(SELECT pd.unit_price FROM product_details pd WHERE pd.product_id = (((seq.n * 7 - 1) % 40) + 1)) AS unit_price,
-	ROUND(((seq.n % 4) + 1) * (SELECT pd.unit_price FROM product_details pd WHERE pd.product_id = (((seq.n * 7 - 1) % 40) + 1)), 2) AS line_total
+	w.wid AS work_id,
+	(((w.wid * 11 + j.j * 7) % 40) + 1) AS product_id,
+	((w.wid + j.j) % 4) + 1 AS quantity,
+	(SELECT pd.unit_price FROM product_details pd WHERE pd.product_id = (((w.wid * 11 + j.j * 7) % 40) + 1)) AS unit_price,
+	ROUND((((w.wid + j.j) % 4) + 1) * (SELECT pd.unit_price FROM product_details pd WHERE pd.product_id = (((w.wid * 11 + j.j * 7) % 40) + 1)), 2) AS line_total
 FROM (
-	SELECT @n2:=@n2+1 AS n
+	SELECT @w:=@w+1 AS wid
 	FROM (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
 				UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) d1
 	CROSS JOIN (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
 				UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) d2
-	CROSS JOIN (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
-				UNION ALL SELECT 5) d3
-	CROSS JOIN (SELECT @n2:=0) init
-	LIMIT 250
-) AS seq;
+	CROSS JOIN (SELECT @w:=0) init
+	LIMIT 100
+) AS w
+CROSS JOIN (
+	SELECT 1 AS j UNION ALL SELECT 2 UNION ALL SELECT 3
+) j
+LIMIT 250;
 
 -- After inserting parts, update working_details to reflect parts_cost and total_cost
 UPDATE working_details w
