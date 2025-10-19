@@ -18,8 +18,8 @@
 -- =====================================================================
 -- DATABASE CREATION (optional - uncomment if needed)
 -- =====================================================================
--- CREATE DATABASE IF NOT EXISTS mechfleet CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
--- USE mechfleet;
+CREATE DATABASE IF NOT EXISTS mechfleet CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+USE mechfleet;
 
 -- =====================================================================
 -- DROP TABLES (reverse dependency order)
