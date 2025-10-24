@@ -84,17 +84,52 @@ if ($editId) {
   $editRow = $st->fetch(PDO::FETCH_ASSOC);
 }
 
-$rows = $pdo->query('
-  SELECT c.*, 
+// Search functionality
+$search = trim($_GET['search'] ?? '');
+$city = trim($_GET['city'] ?? '');
+$state = trim($_GET['state'] ?? '');
+
+$whereConditions = [];
+$params = [];
+
+if ($search !== '') {
+  $whereConditions[] = "(CONCAT(c.first_name, ' ', c.last_name) LIKE :search OR c.email LIKE :search OR c.phone LIKE :search)";
+  $params[':search'] = '%' . $search . '%';
+}
+
+if ($city !== '') {
+  $whereConditions[] = "c.city LIKE :city";
+  $params[':city'] = '%' . $city . '%';
+}
+
+if ($state !== '') {
+  $whereConditions[] = "c.state = :state";
+  $params[':state'] = $state;
+}
+
+$whereClause = '';
+if (!empty($whereConditions)) {
+  $whereClause = ' WHERE ' . implode(' AND ', $whereConditions);
+}
+
+$sql = "SELECT c.*, 
          COUNT(DISTINCT v.vehicle_id) as vehicle_count,
          COUNT(DISTINCT w.work_id) as work_count
   FROM customer c
   LEFT JOIN vehicle v ON c.customer_id = v.customer_id
-  LEFT JOIN working_details w ON c.customer_id = w.customer_id
+  LEFT JOIN working_details w ON c.customer_id = w.customer_id"
+  . $whereClause . "
   GROUP BY c.customer_id
   ORDER BY c.customer_id DESC 
-  LIMIT 200
-')->fetchAll(PDO::FETCH_ASSOC);
+  LIMIT 200";
+
+if (!empty($params)) {
+  $stmt = $pdo->prepare($sql);
+  $stmt->execute($params);
+  $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} else {
+  $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+}
 
 $pageTitle = 'Customers';
 $current_page = 'customers';
@@ -111,6 +146,58 @@ require __DIR__ . '/header_modern.php';
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#customerModal" onclick="resetForm()">
             <i class="fas fa-plus me-2"></i>Add Customer
         </button>
+    </div>
+</div>
+
+<!-- Search and Filter Section -->
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-4">
+                <label for="search" class="form-label">Search</label>
+                <input type="text" class="form-control" id="search" name="search" 
+                       placeholder="Name, Email, or Phone" 
+                       value="<?= htmlspecialchars($search) ?>">
+            </div>
+            <div class="col-md-3">
+                <label for="city" class="form-label">City</label>
+                <input type="text" class="form-control" id="city" name="city" 
+                       placeholder="City name" 
+                       value="<?= htmlspecialchars($city) ?>">
+            </div>
+            <div class="col-md-2">
+                <label for="state" class="form-label">State</label>
+                <input type="text" class="form-control" id="state" name="state" 
+                       placeholder="State" maxlength="2"
+                       value="<?= htmlspecialchars($state) ?>">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label d-block">&nbsp;</label>
+                <button type="submit" class="btn btn-primary me-2">
+                    <i class="fas fa-search me-2"></i>Search
+                </button>
+                <a href="customers.php" class="btn btn-secondary">
+                    <i class="fas fa-times me-2"></i>Clear
+                </a>
+            </div>
+        </form>
+        <?php if ($search || $city || $state): ?>
+            <div class="mt-3">
+                <small class="text-muted">
+                    <i class="fas fa-filter me-1"></i>
+                    Showing <?= count($rows) ?> result(s)
+                    <?php if ($search): ?>
+                        | Search: <strong><?= htmlspecialchars($search) ?></strong>
+                    <?php endif; ?>
+                    <?php if ($city): ?>
+                        | City: <strong><?= htmlspecialchars($city) ?></strong>
+                    <?php endif; ?>
+                    <?php if ($state): ?>
+                        | State: <strong><?= htmlspecialchars($state) ?></strong>
+                    <?php endif; ?>
+                </small>
+            </div>
+        <?php endif; ?>
     </div>
 </div>
 

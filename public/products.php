@@ -27,7 +27,9 @@ try {
       ':sku'=>trim($_POST['sku']), ':nm'=>trim($_POST['product_name']), ':desc'=>trim($_POST['description'] ?? ''),
       ':price'=>(float)$_POST['unit_price'], ':qty'=>(int)$_POST['stock_qty'], ':reorder'=>(int)$_POST['reorder_level'], ':cat'=>trim($_POST['category'] ?? ''),
     ]);
-    $msg = 'Product added';
+    $msg = 'Product added successfully';
+    header('Location: products.php?success=created');
+    exit;
   } elseif ($action === 'update') {
     $id = (int)($_POST['product_id'] ?? 0);
     [$ok, $m] = validate_product($_POST);
@@ -37,81 +39,342 @@ try {
       ':sku'=>trim($_POST['sku']), ':nm'=>trim($_POST['product_name']), ':desc'=>trim($_POST['description'] ?? ''),
       ':price'=>(float)$_POST['unit_price'], ':qty'=>(int)$_POST['stock_qty'], ':reorder'=>(int)$_POST['reorder_level'], ':cat'=>trim($_POST['category'] ?? ''), ':id'=>$id,
     ]);
-    $msg = 'Product updated';
+    $msg = 'Product updated successfully';
+    header('Location: products.php?success=updated');
+    exit;
   } elseif ($action === 'delete') {
     $id = (int)($_POST['product_id'] ?? 0);
     $stmt = $pdo->prepare('DELETE FROM product_details WHERE product_id=:id');
     $stmt->execute([':id'=>$id]);
-    $msg = 'Product deleted';
+    $msg = 'Product deleted successfully';
+    header('Location: products.php?success=deleted');
+    exit;
   }
 } catch (Throwable $t) { $err = $t->getMessage(); }
 
-$editId = isset($_GET['edit']) ? (int)$_GET['edit'] : 0;
-$editRow = null;
-if ($editId) {
-  $st = $pdo->prepare('SELECT * FROM product_details WHERE product_id=:id');
-  $st->execute([':id'=>$editId]);
-  $editRow = $st->fetch(PDO::FETCH_ASSOC);
+// Handle success messages from redirects
+if (isset($_GET['success'])) {
+  switch ($_GET['success']) {
+    case 'created':
+      $msg = 'Product added successfully';
+      break;
+    case 'updated':
+      $msg = 'Product updated successfully';
+      break;
+    case 'deleted':
+      $msg = 'Product deleted successfully';
+      break;
+  }
 }
 
-$rows = $pdo->query('SELECT * FROM product_details ORDER BY product_id DESC LIMIT 200')->fetchAll(PDO::FETCH_ASSOC);
+// Search functionality
+$search = trim($_GET['search'] ?? '');
+$category = trim($_GET['category'] ?? '');
+$stockFilter = trim($_GET['stock_filter'] ?? '');
 
-$pageTitle = 'Products (Inventory)';
-require __DIR__ . '/header.php';
+// Build WHERE clause
+$whereConditions = [];
+$params = [];
+
+if ($search !== '') {
+  $whereConditions[] = "(sku LIKE :search OR product_name LIKE :search OR description LIKE :search)";
+  $params[':search'] = '%' . $search . '%';
+}
+
+if ($category !== '') {
+  $whereConditions[] = "category = :category";
+  $params[':category'] = $category;
+}
+
+if ($stockFilter === 'low') {
+  $whereConditions[] = "stock_qty <= reorder_level";
+} elseif ($stockFilter === 'out') {
+  $whereConditions[] = "stock_qty = 0";
+}
+
+$whereClause = '';
+if (!empty($whereConditions)) {
+  $whereClause = ' WHERE ' . implode(' AND ', $whereConditions);
+}
+
+// Get all categories for filter dropdown
+$categories = $pdo->query('SELECT DISTINCT category FROM product_details WHERE category IS NOT NULL AND category != "" ORDER BY category')->fetchAll(PDO::FETCH_COLUMN);
+
+// Build and execute query
+$sql = "SELECT * FROM product_details" . $whereClause . " ORDER BY product_id DESC LIMIT 200";
+
+if (!empty($params)) {
+  $stmt = $pdo->prepare($sql);
+  $stmt->execute($params);
+  $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} else {
+  $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+}
+
+$pageTitle = 'Products & Inventory';
+$current_page = 'products';
+require __DIR__ . '/header_modern.php';
 ?>
-  <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;">
-    <h2>Products (Inventory)</h2>
-    <div><a href="index.php">Home</a></div>
-  </div>
-  <?php if ($msg): ?><p class="ok"><?= e($msg) ?></p><?php endif; ?>
-  <?php if ($err): ?><p class="err"><strong>Error:</strong> <?= e($err) ?></p><?php endif; ?>
 
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
-    <section>
-      <h3><?= $editRow ? 'Edit Product #'.e((string)$editId) : 'Add Product' ?></h3>
-      <form method="post">
-        <?php if ($editRow): ?><input type="hidden" name="action" value="update" /><input type="hidden" name="product_id" value="<?= e((string)$editId) ?>" /><?php else: ?><input type="hidden" name="action" value="create" /><?php endif; ?>
-        <label>SKU</label><br /><input name="sku" value="<?= e($editRow['sku'] ?? '') ?>" required />
-        <br /><label>Name</label><br /><input name="product_name" value="<?= e($editRow['product_name'] ?? '') ?>" required />
-        <br /><label>Description</label><br /><input name="description" value="<?= e($editRow['description'] ?? '') ?>" />
-        <br /><label>Unit price</label><br /><input type="number" step="0.01" name="unit_price" value="<?= e((string)($editRow['unit_price'] ?? '0')) ?>" required />
-        <br /><label>Stock qty</label><br /><input type="number" name="stock_qty" value="<?= e((string)($editRow['stock_qty'] ?? '0')) ?>" required />
-        <br /><label>Reorder level</label><br /><input type="number" name="reorder_level" value="<?= e((string)($editRow['reorder_level'] ?? '0')) ?>" required />
-        <br /><label>Category</label><br /><input name="category" value="<?= e($editRow['category'] ?? '') ?>" />
-        <div style="margin-top:.5rem"></div>
-        <button type="submit"><?= $editRow ? 'Update' : 'Create' ?></button>
-        <?php if ($editRow): ?><a href="products.php" style="margin-left:.5rem">Cancel</a><?php endif; ?>
-      </form>
-    </section>
+<!-- Page Header -->
+<div class="mf-content-header">
+    <div>
+        <h1 class="mf-page-title">Products & Inventory</h1>
+        <p class="text-muted">Manage product catalog and stock levels</p>
+    </div>
+    <div>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#productModal" onclick="resetForm()">
+            <i class="fas fa-plus me-2"></i>Add Product
+        </button>
+    </div>
+</div>
 
-    <section>
-      <h3>Inventory</h3>
-      <table class="table">
-        <thead><tr><th>ID</th><th>SKU</th><th>Name</th><th>Stock</th><th>Reorder</th><th>Price</th><th>Actions</th></tr></thead>
-        <tbody>
-          <?php foreach ($rows as $r): $low = (int)$r['stock_qty'] <= (int)$r['reorder_level']; ?>
-            <tr style="<?= $low ? 'background:#fff3cd;' : '' ?>">
-              <td><?= e((string)$r['product_id']) ?></td>
-              <td><?= e($r['sku']) ?></td>
-              <td><?= e($r['product_name']) ?></td>
-              <td><?= e((string)$r['stock_qty']) ?></td>
-              <td><?= e((string)$r['reorder_level']) ?></td>
-              <td><?= e((string)$r['unit_price']) ?></td>
-              <td>
-                <a href="products.php?edit=<?= e((string)$r['product_id']) ?>">Edit</a>
-                <form method="post" style="display:inline" onsubmit="return confirm('Delete product #<?= e((string)$r['product_id']) ?>?');">
-                  <input type="hidden" name="action" value="delete" />
-                  <input type="hidden" name="product_id" value="<?= e((string)$r['product_id']) ?>" />
-                  <button type="submit">Delete</button>
-                </form>
-                <?php if ($low): ?>
-                  <a href="#" style="margin-left:.5rem;color:#856404;font-weight:bold;">Reorder</a>
-                <?php endif; ?>
-              </td>
-            </tr>
-          <?php endforeach; ?>
-        </tbody>
-      </table>
-    </section>
-  </div>
-<?php require __DIR__ . '/footer.php'; ?>
+<!-- Search and Filter Section -->
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-4">
+                <label for="search" class="form-label">Search</label>
+                <input type="text" class="form-control" id="search" name="search" 
+                       placeholder="SKU, Name, or Description" 
+                       value="<?= htmlspecialchars($search) ?>">
+            </div>
+            <div class="col-md-3">
+                <label for="categoryFilter" class="form-label">Category</label>
+                <select class="form-select" id="categoryFilter" name="category">
+                    <option value="">All Categories</option>
+                    <?php foreach ($categories as $cat): ?>
+                        <option value="<?= htmlspecialchars($cat) ?>" <?= $category === $cat ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($cat) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label for="stockFilter" class="form-label">Stock Status</label>
+                <select class="form-select" id="stockFilter" name="stock_filter">
+                    <option value="">All Stock</option>
+                    <option value="low" <?= $stockFilter === 'low' ? 'selected' : '' ?>>Low Stock</option>
+                    <option value="out" <?= $stockFilter === 'out' ? 'selected' : '' ?>>Out of Stock</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label d-block">&nbsp;</label>
+                <button type="submit" class="btn btn-primary me-2">
+                    <i class="fas fa-search me-2"></i>Search
+                </button>
+                <a href="products.php" class="btn btn-secondary">
+                    <i class="fas fa-times me-2"></i>Clear
+                </a>
+            </div>
+        </form>
+        <?php if ($search || $category || $stockFilter): ?>
+            <div class="mt-3">
+                <small class="text-muted">
+                    <i class="fas fa-filter me-1"></i>
+                    Showing <?= count($rows) ?> result(s)
+                    <?php if ($search): ?>
+                        | Search: <strong><?= htmlspecialchars($search) ?></strong>
+                    <?php endif; ?>
+                    <?php if ($category): ?>
+                        | Category: <strong><?= htmlspecialchars($category) ?></strong>
+                    <?php endif; ?>
+                    <?php if ($stockFilter): ?>
+                        | Stock: <strong><?= $stockFilter === 'low' ? 'Low Stock' : 'Out of Stock' ?></strong>
+                    <?php endif; ?>
+                </small>
+            </div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<!-- Products Table -->
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table id="productsTable" class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>SKU</th>
+                        <th>Product Name</th>
+                        <th>Category</th>
+                        <th>Stock</th>
+                        <th>Reorder Level</th>
+                        <th>Unit Price</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($rows as $r): 
+                        $lowStock = (int)$r['stock_qty'] <= (int)$r['reorder_level'];
+                        $outOfStock = (int)$r['stock_qty'] === 0;
+                    ?>
+                    <tr>
+                        <td><strong>#<?= e((string)$r['product_id']) ?></strong></td>
+                        <td><code><?= e($r['sku']) ?></code></td>
+                        <td>
+                            <strong><?= e($r['product_name']) ?></strong>
+                            <?php if ($r['description']): ?>
+                                <br><small class="text-muted"><?= e($r['description']) ?></small>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= e($r['category'] ?: 'N/A') ?></td>
+                        <td>
+                            <?php if ($outOfStock): ?>
+                                <span class="mf-badge mf-badge-danger"><?= e((string)$r['stock_qty']) ?> (Out)</span>
+                            <?php elseif ($lowStock): ?>
+                                <span class="mf-badge mf-badge-warning"><?= e((string)$r['stock_qty']) ?> (Low)</span>
+                            <?php else: ?>
+                                <span class="mf-badge mf-badge-success"><?= e((string)$r['stock_qty']) ?></span>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= e((string)$r['reorder_level']) ?></td>
+                        <td><strong>$<?= number_format($r['unit_price'], 2) ?></strong></td>
+                        <td>
+                            <button class="btn btn-sm mf-btn-icon" onclick='editProduct(<?= htmlspecialchars(json_encode($r), ENT_QUOTES) ?>)' title="Edit">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-sm mf-btn-icon" onclick='deleteProduct(<?= (int)$r['product_id'] ?>, <?= htmlspecialchars(json_encode($r['product_name']), ENT_QUOTES) ?>)' title="Delete">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Product Modal -->
+<div class="modal fade" id="productModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form id="productForm" method="post">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle">Add Product</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="action" id="formAction" value="create">
+                    <input type="hidden" name="product_id" id="productId">
+                    
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="sku" class="form-label">SKU <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="sku" name="sku" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="productName" class="form-label">Product Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="productName" name="product_name" required>
+                        </div>
+                        <div class="col-12">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea class="form-control" id="description" name="description" rows="2"></textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="category" class="form-label">Category</label>
+                            <input type="text" class="form-control" id="category" name="category" list="categoryList">
+                            <datalist id="categoryList">
+                                <?php foreach ($categories as $cat): ?>
+                                    <option value="<?= htmlspecialchars($cat) ?>">
+                                <?php endforeach; ?>
+                            </datalist>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="unitPrice" class="form-label">Unit Price <span class="text-danger">*</span></label>
+                            <input type="number" step="0.01" min="0" class="form-control" id="unitPrice" name="unit_price" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="stockQty" class="form-label">Stock Quantity <span class="text-danger">*</span></label>
+                            <input type="number" min="0" class="form-control" id="stockQty" name="stock_qty" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="reorderLevel" class="form-label">Reorder Level <span class="text-danger">*</span></label>
+                            <input type="number" min="0" class="form-control" id="reorderLevel" name="reorder_level" required>
+                            <small class="text-muted">Alert when stock falls to this level</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i><span id="submitBtn">Save Product</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Form (hidden) -->
+<form id="deleteForm" method="post" style="display:none;">
+    <input type="hidden" name="action" value="delete">
+    <input type="hidden" name="product_id" id="deleteProductId">
+</form>
+
+<script>
+// Initialize DataTable
+$(document).ready(function() {
+    initDataTable('#productsTable', {
+        order: [[0, 'desc']],
+        columnDefs: [
+            { orderable: false, targets: 7 } // Actions column
+        ]
+    });
+});
+
+// Reset form for creating new product
+function resetForm() {
+    document.getElementById('productForm').reset();
+    document.getElementById('formAction').value = 'create';
+    document.getElementById('productId').value = '';
+    document.getElementById('modalTitle').textContent = 'Add Product';
+    document.getElementById('submitBtn').textContent = 'Save Product';
+    // Remove validation classes
+    document.querySelectorAll('#productForm .is-invalid, #productForm .is-valid').forEach(el => {
+        el.classList.remove('is-invalid', 'is-valid');
+    });
+}
+
+// Edit product
+function editProduct(product) {
+    document.getElementById('formAction').value = 'update';
+    document.getElementById('productId').value = product.product_id;
+    document.getElementById('sku').value = product.sku;
+    document.getElementById('productName').value = product.product_name;
+    document.getElementById('description').value = product.description || '';
+    document.getElementById('category').value = product.category || '';
+    document.getElementById('unitPrice').value = product.unit_price;
+    document.getElementById('stockQty').value = product.stock_qty;
+    document.getElementById('reorderLevel').value = product.reorder_level;
+    document.getElementById('modalTitle').textContent = 'Edit Product #' + product.product_id;
+    document.getElementById('submitBtn').textContent = 'Update Product';
+    
+    const modal = new bootstrap.Modal(document.getElementById('productModal'));
+    modal.show();
+}
+
+// Delete product
+function deleteProduct(id, name) {
+    confirmDelete(
+        `Are you sure you want to delete this product?\n\nProduct: ${name}`,
+        function() {
+            document.getElementById('deleteProductId').value = id;
+            document.getElementById('deleteForm').submit();
+        }
+    );
+}
+
+// Show notifications from PHP
+<?php if ($msg): ?>
+    showSuccess('<?= addslashes($msg) ?>');
+<?php endif; ?>
+
+<?php if ($err): ?>
+    showError('<?= addslashes($err) ?>');
+<?php endif; ?>
+</script>
+
+<?php require __DIR__ . '/footer_modern.php'; ?>

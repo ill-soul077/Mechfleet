@@ -63,17 +63,53 @@ if ($editId) {
   $editRow = $st->fetch(PDO::FETCH_ASSOC);
 }
 $customers = $pdo->query('SELECT customer_id, CONCAT(first_name, " ", last_name) AS name FROM customer ORDER BY customer_id DESC LIMIT 500')->fetchAll(PDO::FETCH_ASSOC);
-$rows = $pdo->query('
-  SELECT v.*, 
-         CONCAT(c.first_name, " ", c.last_name) AS customer_name,
+
+// Search functionality
+$search = trim($_GET['search'] ?? '');
+$make = trim($_GET['make'] ?? '');
+$year = trim($_GET['year'] ?? '');
+
+$whereConditions = [];
+$params = [];
+
+if ($search !== '') {
+  $whereConditions[] = "(CONCAT(c.first_name, ' ', c.last_name) LIKE :search OR v.vin LIKE :search OR v.license_plate LIKE :search OR v.model LIKE :search)";
+  $params[':search'] = '%' . $search . '%';
+}
+
+if ($make !== '') {
+  $whereConditions[] = "v.make LIKE :make";
+  $params[':make'] = '%' . $make . '%';
+}
+
+if ($year !== '') {
+  $whereConditions[] = "v.year = :year";
+  $params[':year'] = $year;
+}
+
+$whereClause = '';
+if (!empty($whereConditions)) {
+  $whereClause = ' WHERE ' . implode(' AND ', $whereConditions);
+}
+
+$sql = "SELECT v.*, 
+         CONCAT(c.first_name, ' ', c.last_name) AS customer_name,
          COUNT(w.work_id) as work_count
   FROM vehicle v 
   JOIN customer c ON c.customer_id = v.customer_id 
-  LEFT JOIN working_details w ON v.vehicle_id = w.vehicle_id
+  LEFT JOIN working_details w ON v.vehicle_id = w.vehicle_id"
+  . $whereClause . "
   GROUP BY v.vehicle_id
   ORDER BY v.vehicle_id DESC 
-  LIMIT 200
-')->fetchAll(PDO::FETCH_ASSOC);
+  LIMIT 200";
+
+if (!empty($params)) {
+  $stmt = $pdo->prepare($sql);
+  $stmt->execute($params);
+  $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} else {
+  $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+}
 
 $pageTitle = 'Vehicles';
 $current_page = 'vehicles';
@@ -90,6 +126,58 @@ require __DIR__ . '/header_modern.php';
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#vehicleModal" onclick="resetForm()">
             <i class="fas fa-plus me-2"></i>Add Vehicle
         </button>
+    </div>
+</div>
+
+<!-- Search and Filter Section -->
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-4">
+                <label for="search" class="form-label">Search</label>
+                <input type="text" class="form-control" id="search" name="search" 
+                       placeholder="Owner, VIN, License Plate, or Model" 
+                       value="<?= htmlspecialchars($search) ?>">
+            </div>
+            <div class="col-md-3">
+                <label for="make" class="form-label">Make</label>
+                <input type="text" class="form-control" id="make" name="make" 
+                       placeholder="e.g., Toyota, Honda" 
+                       value="<?= htmlspecialchars($make) ?>">
+            </div>
+            <div class="col-md-2">
+                <label for="year" class="form-label">Year</label>
+                <input type="number" class="form-control" id="year" name="year" 
+                       placeholder="e.g., 2020" min="1900" max="2100"
+                       value="<?= htmlspecialchars($year) ?>">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label d-block">&nbsp;</label>
+                <button type="submit" class="btn btn-primary me-2">
+                    <i class="fas fa-search me-2"></i>Search
+                </button>
+                <a href="vehicles.php" class="btn btn-secondary">
+                    <i class="fas fa-times me-2"></i>Clear
+                </a>
+            </div>
+        </form>
+        <?php if ($search || $make || $year): ?>
+            <div class="mt-3">
+                <small class="text-muted">
+                    <i class="fas fa-filter me-1"></i>
+                    Showing <?= count($rows) ?> result(s)
+                    <?php if ($search): ?>
+                        | Search: <strong><?= htmlspecialchars($search) ?></strong>
+                    <?php endif; ?>
+                    <?php if ($make): ?>
+                        | Make: <strong><?= htmlspecialchars($make) ?></strong>
+                    <?php endif; ?>
+                    <?php if ($year): ?>
+                        | Year: <strong><?= htmlspecialchars($year) ?></strong>
+                    <?php endif; ?>
+                </small>
+            </div>
+        <?php endif; ?>
     </div>
 </div>
 
