@@ -5,8 +5,8 @@ require_once __DIR__ . '/../includes/auth.php';
 // Get current page for active nav highlighting
 $current_page = basename($_SERVER['PHP_SELF']);
 
-// Get user info from session (assuming auth stores username)
-$username = $_SESSION['username'] ?? 'Admin';
+// Get user info from session
+$username = $_SESSION['manager_user'] ?? 'Admin';
 $user_initials = strtoupper(substr($username, 0, 1));
 ?><!DOCTYPE html>
 <html lang="en">
