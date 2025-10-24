@@ -48,24 +48,33 @@ try {
     error_log("Labor cost calculated: $labor");
     
     // Insert work order first
-    $stmt = $pdo->prepare('INSERT INTO working_details (customer_id,vehicle_id,assigned_mechanic_id,service_id,status,labor_cost,parts_cost,total_cost,start_date,notes) VALUES (:c,:v,:m,:s,:st,:lc,0,:lc,:sd,:n)');
-    $stmt->execute([':c'=>$customer_id, ':v'=>$vehicle_id, ':m'=>$mechanic_id, ':s'=>$service_id, ':st'=>$status, ':lc'=>$labor, ':sd'=>$start_date, ':n'=>$notes]);
+    $stmt = $pdo->prepare('INSERT INTO working_details (customer_id,vehicle_id,assigned_mechanic_id,service_id,status,labor_cost,parts_cost,total_cost,start_date,notes) VALUES (:c,:v,:m,:s,:st,:lc,:pc,:tc,:sd,:n)');
+    $stmt->execute([':c'=>$customer_id, ':v'=>$vehicle_id, ':m'=>$mechanic_id, ':s'=>$service_id, ':st'=>$status, ':lc'=>$labor, ':pc'=>0, ':tc'=>$labor, ':sd'=>$start_date, ':n'=>$notes]);
     $newId = (int)$pdo->lastInsertId();
     error_log("Work order created with ID: $newId");
     
     // Add parts if provided (each addWorkPart handles its own transaction)
     if (!empty($part_products) && is_array($part_products)) {
-      error_log("Adding " . count($part_products) . " parts");
+      error_log("Adding " . count($part_products) . " parts to work order #$newId");
       foreach ($part_products as $index => $product_id) {
         $product_id = (int)$product_id;
         $quantity = (int)($part_quantities[$index] ?? 0);
         
         if ($product_id > 0 && $quantity > 0) {
-          error_log("Adding part: product_id=$product_id, qty=$quantity");
-          // Add part using the existing function (it handles its own transaction)
+          // Get stock before for logging
+          $stockBefore = $pdo->query("SELECT stock_qty FROM product_details WHERE product_id=$product_id")->fetchColumn();
+          error_log("Adding part: product_id=$product_id, qty=$quantity, stock_before=$stockBefore");
+          
+          // Add part using the existing function (it handles its own transaction and decrements inventory)
           addWorkPart($pdo, $newId, $product_id, $quantity, false);
+          
+          // Get stock after for logging
+          $stockAfter = $pdo->query("SELECT stock_qty FROM product_details WHERE product_id=$product_id")->fetchColumn();
+          error_log("Part added successfully. Stock decremented from $stockBefore to $stockAfter");
         }
       }
+    } else {
+      error_log("No parts to add (part_products is empty or not an array)");
     }
     
     error_log("Work order creation complete. Redirecting to list with success message");
@@ -473,7 +482,10 @@ if (isset($_GET['success']) && $_GET['success'] === 'created') {
                                 <div id="partsContainer">
                                     <!-- Part rows will be added here dynamically -->
                                 </div>
-                                <small class="text-muted">Add parts that will be needed for this repair. Parts cost will be calculated automatically.</small>
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle me-1"></i>Add parts that will be needed for this repair. 
+                                    <strong>Parts will be automatically deducted from inventory when the work order is created.</strong>
+                                </small>
                             </div>
                         </div>
                     </div>
@@ -511,6 +523,7 @@ if (isset($_GET['success']) && $_GET['success'] === 'created') {
                     <option value="">Select Product</option>
                     ${productsData.map(p => `<option value="${p.product_id}" data-price="${p.unit_price}" data-stock="${p.stock_qty}">${p.product_name} - $${parseFloat(p.unit_price).toFixed(2)} (Stock: ${p.stock_qty})</option>`).join('')}
                 </select>
+                <small class="text-muted" id="stockWarning${partRowIndex}"></small>
             </div>
             <div class="col-md-3">
                 <input type="number" class="form-control" name="part_quantity[]" min="1" value="1" placeholder="Qty" onchange="updatePartPrice(${partRowIndex})">
@@ -543,6 +556,7 @@ if (isset($_GET['success']) && $_GET['success'] === 'created') {
         const select = row.querySelector('select[name="part_product[]"]');
         const qtyInput = row.querySelector('input[name="part_quantity[]"]');
         const totalInput = document.getElementById('partTotal' + index);
+        const stockWarning = document.getElementById('stockWarning' + index);
         
         if (select && select.value && qtyInput) {
             const option = select.options[select.selectedIndex];
@@ -552,14 +566,28 @@ if (isset($_GET['success']) && $_GET['success'] === 'created') {
             
             if (qty > stock) {
                 qtyInput.setCustomValidity('Insufficient stock. Available: ' + stock);
+                qtyInput.classList.add('is-invalid');
                 totalInput.value = '';
+                if (stockWarning) {
+                    stockWarning.innerHTML = '<i class="fas fa-exclamation-triangle text-danger"></i> Insufficient stock! Only ' + stock + ' available.';
+                    stockWarning.style.color = '#dc3545';
+                }
             } else {
                 qtyInput.setCustomValidity('');
+                qtyInput.classList.remove('is-invalid');
                 const total = price * qty;
                 totalInput.value = '$' + total.toFixed(2);
+                if (stockWarning) {
+                    const remaining = stock - qty;
+                    stockWarning.innerHTML = '<i class="fas fa-info-circle text-success"></i> ' + remaining + ' will remain in stock after this order.';
+                    stockWarning.style.color = '#28a745';
+                }
             }
         } else {
             totalInput.value = '';
+            if (stockWarning) {
+                stockWarning.innerHTML = '';
+            }
         }
     }
     

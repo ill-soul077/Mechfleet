@@ -46,8 +46,10 @@ $whereConditions = [];
 $params = [];
 
 if ($search !== '') {
-  $whereConditions[] = "(CONCAT(c.first_name, ' ', c.last_name) LIKE :search OR s.service_name LIKE :search OR i.transaction_reference LIKE :search)";
+  $whereConditions[] = "(CONCAT(c.first_name, ' ', c.last_name) LIKE :search OR s.service_name LIKE :search2 OR i.transaction_reference LIKE :search3)";
   $params[':search'] = '%' . $search . '%';
+  $params[':search2'] = '%' . $search . '%';
+  $params[':search3'] = '%' . $search . '%';
 }
 
 if ($method !== '') {

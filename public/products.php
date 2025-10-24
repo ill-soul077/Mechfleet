@@ -77,8 +77,10 @@ $whereConditions = [];
 $params = [];
 
 if ($search !== '') {
-  $whereConditions[] = "(sku LIKE :search OR product_name LIKE :search OR description LIKE :search)";
+  $whereConditions[] = "(sku LIKE :search OR product_name LIKE :search2 OR description LIKE :search3)";
   $params[':search'] = '%' . $search . '%';
+  $params[':search2'] = '%' . $search . '%';
+  $params[':search3'] = '%' . $search . '%';
 }
 
 if ($category !== '') {

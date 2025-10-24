@@ -65,8 +65,9 @@ $whereConditions = [];
 $params = [];
 
 if ($search !== '') {
-  $whereConditions[] = "(service_name LIKE :search OR description LIKE :search)";
+  $whereConditions[] = "(service_name LIKE :search OR description LIKE :search2)";
   $params[':search'] = '%' . $search . '%';
+  $params[':search2'] = '%' . $search . '%';
 }
 
 if ($statusFilter !== '') {
