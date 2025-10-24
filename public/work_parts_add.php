@@ -123,22 +123,39 @@ function savePart(ev){
   msgDiv.classList.remove('d-none');
   msgDiv.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Adding part to work order...';
   
+  console.log('Sending request to add part...');
+  
   fetch('api/add_work_part.php',{method:'POST', body:data})
-    .then(r=>r.json())
-    .then(j=>{
-      if(j.success){ 
-        msgDiv.className = 'alert alert-success';
-        msgDiv.innerHTML = '<i class="fas fa-check me-2"></i>Part added successfully! Stock updated. Reloading page...';
-        setTimeout(()=>window.location.reload(), 1000); 
-      } else { 
+    .then(r=> {
+      console.log('Response received:', r.status);
+      return r.text();
+    })
+    .then(text => {
+      console.log('Response text:', text);
+      try {
+        const j = JSON.parse(text);
+        if(j.success){ 
+          msgDiv.className = 'alert alert-success';
+          msgDiv.innerHTML = '<i class="fas fa-check me-2"></i>Part added! Reloading...';
+          console.log('Success! Reloading page...');
+          setTimeout(()=>window.location.reload(true), 800); 
+        } else { 
+          msgDiv.className = 'alert alert-danger';
+          msgDiv.innerHTML = '<i class="fas fa-exclamation-circle me-2"></i>Error: '+(j.error||'Unknown error');
+          console.error('API error:', j.error);
+          submitBtn.disabled = false;
+        }
+      } catch(e) {
         msgDiv.className = 'alert alert-danger';
-        msgDiv.innerHTML = '<i class="fas fa-exclamation-circle me-2"></i>Error: '+(j.error||'Unknown error');
+        msgDiv.innerHTML = '<i class="fas fa-exclamation-circle me-2"></i>Invalid response from server';
+        console.error('Parse error:', e, text);
         submitBtn.disabled = false;
       }
     })
     .catch(e=>{ 
       msgDiv.className = 'alert alert-danger';
-      msgDiv.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Network error. Please try again.';
+      msgDiv.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Network error: ' + e.message;
+      console.error('Network error:', e);
       submitBtn.disabled = false;
     });
   
