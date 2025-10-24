@@ -15,16 +15,16 @@ try {
     $stmt = $pdo->query("SELECT COUNT(*) as total FROM customer");
     $totalCustomers = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
     
-    // Active Work Orders
-    $stmt = $pdo->query("SELECT COUNT(*) as total FROM working_details WHERE status != 'Completed'");
+    // Active Work Orders (not completed)
+    $stmt = $pdo->query("SELECT COUNT(*) as total FROM working_details WHERE status != 'completed'");
     $activeWorkOrders = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
     
     // Total Revenue (this month)
-    $stmt = $pdo->query("SELECT COALESCE(SUM(amount), 0) as total FROM income WHERE MONTH(date) = MONTH(CURRENT_DATE()) AND YEAR(date) = YEAR(CURRENT_DATE())");
+    $stmt = $pdo->query("SELECT COALESCE(SUM(amount), 0) as total FROM income WHERE MONTH(payment_date) = MONTH(CURRENT_DATE()) AND YEAR(payment_date) = YEAR(CURRENT_DATE())");
     $monthlyRevenue = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
     
     // Total Mechanics
-    $stmt = $pdo->query("SELECT COUNT(*) as total FROM mechanics");
+    $stmt = $pdo->query("SELECT COUNT(*) as total FROM mechanics WHERE active = 1");
     $totalMechanics = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
     
     // Recent Work Orders
@@ -36,10 +36,10 @@ try {
             w.total_cost,
             CONCAT(c.first_name, ' ', c.last_name) as customer_name,
             CONCAT(v.year, ' ', v.make, ' ', v.model) as vehicle_name,
-            v.license_plate as vehicle_no
+            v.vin as vehicle_no
         FROM working_details w
-        LEFT JOIN customer c ON w.customer_id = c.customer_id
-        LEFT JOIN vehicle v ON w.vehicle_id = v.vehicle_id
+        JOIN customer c ON w.customer_id = c.customer_id
+        JOIN vehicle v ON w.vehicle_id = v.vehicle_id
         ORDER BY w.work_id DESC
         LIMIT 10
     ");

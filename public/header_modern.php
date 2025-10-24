@@ -114,12 +114,6 @@ $user_initials = strtoupper(substr($username, 0, 1));
         <button class="mf-toggle-btn" id="sidebarToggle" aria-label="Toggle Sidebar">
           <i class="fas fa-bars"></i>
         </button>
-        
-        <!-- Search Box -->
-        <div class="mf-search-box">
-          <i class="fas fa-search"></i>
-          <input type="text" class="form-control" placeholder="Search customers, vehicles, work orders..." id="globalSearch">
-        </div>
       </div>
       
       <!-- Right Section -->
