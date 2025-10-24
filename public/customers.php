@@ -39,11 +39,38 @@ try {
     $msg = 'Customer updated';
   } elseif ($action === 'delete') {
     $id = (int)($_POST['customer_id'] ?? 0);
+    
+    // Check if customer has vehicles before deleting
+    $checkStmt = $pdo->prepare('SELECT COUNT(*) as vehicle_count FROM vehicle WHERE customer_id = :id');
+    $checkStmt->execute([':id' => $id]);
+    $result = $checkStmt->fetch(PDO::FETCH_ASSOC);
+    
+    if ($result['vehicle_count'] > 0) {
+      throw new RuntimeException('Cannot delete customer: This customer has ' . $result['vehicle_count'] . ' vehicle(s) registered. Please delete or reassign the vehicles first.');
+    }
+    
+    // Check if customer has work orders
+    $checkWorkStmt = $pdo->prepare('SELECT COUNT(*) as work_count FROM working_details WHERE customer_id = :id');
+    $checkWorkStmt->execute([':id' => $id]);
+    $workResult = $checkWorkStmt->fetch(PDO::FETCH_ASSOC);
+    
+    if ($workResult['work_count'] > 0) {
+      throw new RuntimeException('Cannot delete customer: This customer has ' . $workResult['work_count'] . ' work order(s). Please delete the work orders first.');
+    }
+    
+    // Safe to delete
     $stmt = $pdo->prepare('DELETE FROM customer WHERE customer_id=:id');
     $stmt->execute([':id'=>$id]);
-    $msg = 'Customer deleted';
+    $msg = 'Customer deleted successfully';
   }
-} catch (Throwable $t) { $err = $t->getMessage(); }
+} catch (Throwable $t) { 
+  // Better error message for foreign key constraints
+  if (strpos($t->getMessage(), 'Integrity constraint violation') !== false) {
+    $err = 'Cannot delete customer: This customer has related records (vehicles or work orders). Please delete those records first.';
+  } else {
+    $err = $t->getMessage();
+  }
+}
 
 $editId = isset($_GET['edit']) ? (int)$_GET['edit'] : 0;
 $editRow = null;
@@ -53,7 +80,17 @@ if ($editId) {
   $editRow = $st->fetch(PDO::FETCH_ASSOC);
 }
 
-$rows = $pdo->query('SELECT * FROM customer ORDER BY customer_id DESC LIMIT 200')->fetchAll(PDO::FETCH_ASSOC);
+$rows = $pdo->query('
+  SELECT c.*, 
+         COUNT(DISTINCT v.vehicle_id) as vehicle_count,
+         COUNT(DISTINCT w.work_id) as work_count
+  FROM customer c
+  LEFT JOIN vehicle v ON c.customer_id = v.customer_id
+  LEFT JOIN working_details w ON c.customer_id = w.customer_id
+  GROUP BY c.customer_id
+  ORDER BY c.customer_id DESC 
+  LIMIT 200
+')->fetchAll(PDO::FETCH_ASSOC);
 
 $pageTitle = 'Customers';
 require __DIR__ . '/header.php';
@@ -87,7 +124,7 @@ require __DIR__ . '/header.php';
     <section>
       <h3>Recent Customers</h3>
       <table class="table">
-        <thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Phone</th><th>Actions</th></tr></thead>
+        <thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Phone</th><th>Vehicles</th><th>Actions</th></tr></thead>
         <tbody>
           <?php foreach ($rows as $r): ?>
             <tr>
@@ -95,13 +132,18 @@ require __DIR__ . '/header.php';
               <td><?= e($r['first_name'].' '.$r['last_name']) ?></td>
               <td><?= e($r['email']) ?></td>
               <td><?= e($r['phone']) ?></td>
+              <td><?= e((string)$r['vehicle_count']) ?></td>
               <td>
                 <a href="customers.php?edit=<?= e((string)$r['customer_id']) ?>">Edit</a>
-                <form method="post" style="display:inline" onsubmit="return confirm('Delete customer #<?= e((string)$r['customer_id']) ?>?');">
-                  <input type="hidden" name="action" value="delete" />
-                  <input type="hidden" name="customer_id" value="<?= e((string)$r['customer_id']) ?>" />
-                  <button type="submit">Delete</button>
-                </form>
+                <?php if ($r['vehicle_count'] > 0 || $r['work_count'] > 0): ?>
+                  <button type="button" disabled title="Cannot delete: Has <?= e((string)$r['vehicle_count']) ?> vehicle(s) and <?= e((string)$r['work_count']) ?> work order(s)">Delete</button>
+                <?php else: ?>
+                  <form method="post" style="display:inline" onsubmit="return confirm('Delete customer #<?= e((string)$r['customer_id']) ?>?');">
+                    <input type="hidden" name="action" value="delete" />
+                    <input type="hidden" name="customer_id" value="<?= e((string)$r['customer_id']) ?>" />
+                    <button type="submit">Delete</button>
+                  </form>
+                <?php endif; ?>
               </td>
             </tr>
           <?php endforeach; ?>
