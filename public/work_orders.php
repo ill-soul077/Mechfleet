@@ -30,23 +30,62 @@ try {
     $start_date  = trim($_POST['start_date'] ?? date('Y-m-d'));
     $status      = trim($_POST['status'] ?? 'pending');
     $notes       = trim($_POST['notes'] ?? '');
-    if (!$customer_id || !$vehicle_id || !$mechanic_id || !$service_id) throw new RuntimeException('All fields are required');
-    $labor = compute_labor_cost($pdo, $mechanic_id, $service_id);
-    $parts_cost = 0.00;
-    $total_cost = $labor + $parts_cost;
-    $stmt = $pdo->prepare('INSERT INTO working_details (customer_id,vehicle_id,assigned_mechanic_id,service_id,status,labor_cost,parts_cost,total_cost,start_date,notes) VALUES (:c,:v,:m,:s,:st,:lc,:pc,:tc,:sd,:n)');
-    $stmt->execute([':c'=>$customer_id, ':v'=>$vehicle_id, ':m'=>$mechanic_id, ':s'=>$service_id, ':st'=>$status, ':lc'=>$labor, ':pc'=>$parts_cost, ':tc'=>$total_cost, ':sd'=>$start_date, ':n'=>$notes]);
-    $msg = 'Work order created successfully';
-    // Redirect to detail view to clearly show the newly created record
-    $newId = (int)$pdo->lastInsertId();
-    // Fallback: if lastInsertId is not available, go back to list
-    if ($newId > 0) {
-      header('Location: work_orders.php?id=' . $newId . '&success=created');
-    } else {
-      // Redirect to prevent form resubmission
-      header('Location: work_orders.php?success=created');
+    
+    // Get parts data from form
+    $part_products = $_POST['part_product'] ?? [];
+    $part_quantities = $_POST['part_quantity'] ?? [];
+    
+    if (!$customer_id || !$vehicle_id || !$mechanic_id || !$service_id) {
+      throw new RuntimeException('All fields are required');
     }
-    exit;
+    
+    $pdo->beginTransaction();
+    try {
+      // Calculate labor cost
+      $labor = compute_labor_cost($pdo, $mechanic_id, $service_id);
+      
+      // Insert work order first
+      $stmt = $pdo->prepare('INSERT INTO working_details (customer_id,vehicle_id,assigned_mechanic_id,service_id,status,labor_cost,parts_cost,total_cost,start_date,notes) VALUES (:c,:v,:m,:s,:st,:lc,0,0,:sd,:n)');
+      $stmt->execute([':c'=>$customer_id, ':v'=>$vehicle_id, ':m'=>$mechanic_id, ':s'=>$service_id, ':st'=>$status, ':lc'=>$labor, ':sd'=>$start_date, ':n'=>$notes]);
+      $newId = (int)$pdo->lastInsertId();
+      
+      // Add parts if provided
+      $parts_cost = 0.00;
+      if (!empty($part_products) && is_array($part_products)) {
+        foreach ($part_products as $index => $product_id) {
+          $product_id = (int)$product_id;
+          $quantity = (int)($part_quantities[$index] ?? 0);
+          
+          if ($product_id > 0 && $quantity > 0) {
+            // Add part using the existing function
+            addWorkPart($pdo, $newId, $product_id, $quantity, false);
+          }
+        }
+        
+        // Get updated parts cost
+        $sum = $pdo->prepare('SELECT COALESCE(SUM(line_total), 0) FROM work_parts WHERE work_id = :w');
+        $sum->execute([':w' => $newId]);
+        $parts_cost = (float)$sum->fetchColumn();
+        
+        // Update the work order with correct totals
+        $total_cost = $labor + $parts_cost;
+        $upd = $pdo->prepare('UPDATE working_details SET parts_cost = :pc, total_cost = :tc WHERE work_id = :w');
+        $upd->execute([':pc' => $parts_cost, ':tc' => $total_cost, ':w' => $newId]);
+      } else {
+        // No parts, just update total
+        $upd = $pdo->prepare('UPDATE working_details SET total_cost = :tc WHERE work_id = :w');
+        $upd->execute([':tc' => $labor, ':w' => $newId]);
+      }
+      
+      $pdo->commit();
+      $msg = 'Work order created successfully';
+      header('Location: work_orders.php?id=' . $newId . '&success=created');
+      exit;
+      
+    } catch (Throwable $e) {
+      $pdo->rollBack();
+      throw $e;
+    }
   } elseif ($action === 'update') {
     $work_id = (int)($_POST['work_id'] ?? 0);
     $status = trim($_POST['status'] ?? 'pending');
@@ -131,6 +170,7 @@ $customers = $pdo->query('SELECT customer_id, CONCAT(first_name, " ", last_name)
 $vehicles  = $pdo->query('SELECT v.vehicle_id, CONCAT(v.year, " ", v.make, " ", v.model, " (", c.first_name, " ", c.last_name, ")") AS label FROM vehicle v JOIN customer c ON c.customer_id=v.customer_id ORDER BY v.vehicle_id DESC LIMIT 500')->fetchAll(PDO::FETCH_ASSOC);
 $mechanics = $pdo->query('SELECT mechanic_id, CONCAT(first_name, " ", last_name) AS name FROM mechanics WHERE active=1 ORDER BY mechanic_id')->fetchAll(PDO::FETCH_ASSOC);
 $services  = $pdo->query('SELECT service_id, service_name FROM service_details WHERE active=1 ORDER BY service_id')->fetchAll(PDO::FETCH_ASSOC);
+$products  = $pdo->query('SELECT product_id, sku, product_name, stock_qty, unit_price FROM product_details WHERE stock_qty > 0 ORDER BY product_name')->fetchAll(PDO::FETCH_ASSOC);
 
 // Initialize variables
 $jobRow = null;
@@ -421,6 +461,21 @@ require __DIR__ . '/header_modern.php';
                                 <label for="notes" class="form-label">Notes</label>
                                 <textarea class="form-control" id="notes" name="notes" rows="3"></textarea>
                             </div>
+                            
+                            <!-- Parts Section -->
+                            <div class="col-12">
+                                <hr class="my-3">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h6 class="mb-0"><i class="fas fa-cogs me-2"></i>Parts Needed (Optional)</h6>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="addPartRow()">
+                                        <i class="fas fa-plus me-1"></i>Add Part
+                                    </button>
+                                </div>
+                                <div id="partsContainer">
+                                    <!-- Part rows will be added here dynamically -->
+                                </div>
+                                <small class="text-muted">Add parts that will be needed for this repair. Parts cost will be calculated automatically.</small>
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -441,6 +496,74 @@ require __DIR__ . '/header_modern.php';
     </form>
 
     <script>
+    let partRowIndex = 0;
+    const productsData = <?= json_encode($products) ?>;
+    
+    // Add a new part row
+    function addPartRow() {
+        const container = document.getElementById('partsContainer');
+        const rowDiv = document.createElement('div');
+        rowDiv.className = 'row g-2 mb-2 part-row';
+        rowDiv.id = 'partRow' + partRowIndex;
+        
+        rowDiv.innerHTML = `
+            <div class="col-md-6">
+                <select class="form-select" name="part_product[]" onchange="updatePartPrice(${partRowIndex})">
+                    <option value="">Select Product</option>
+                    ${productsData.map(p => `<option value="${p.product_id}" data-price="${p.unit_price}" data-stock="${p.stock_qty}">${p.product_name} - $${parseFloat(p.unit_price).toFixed(2)} (Stock: ${p.stock_qty})</option>`).join('')}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <input type="number" class="form-control" name="part_quantity[]" min="1" value="1" placeholder="Qty" onchange="updatePartPrice(${partRowIndex})">
+            </div>
+            <div class="col-md-2">
+                <input type="text" class="form-control" id="partTotal${partRowIndex}" readonly placeholder="$0.00">
+            </div>
+            <div class="col-md-1">
+                <button type="button" class="btn btn-sm btn-danger w-100" onclick="removePartRow(${partRowIndex})" title="Remove">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `;
+        
+        container.appendChild(rowDiv);
+        partRowIndex++;
+    }
+    
+    // Remove a part row
+    function removePartRow(index) {
+        const row = document.getElementById('partRow' + index);
+        if (row) row.remove();
+    }
+    
+    // Update part price calculation
+    function updatePartPrice(index) {
+        const row = document.getElementById('partRow' + index);
+        if (!row) return;
+        
+        const select = row.querySelector('select[name="part_product[]"]');
+        const qtyInput = row.querySelector('input[name="part_quantity[]"]');
+        const totalInput = document.getElementById('partTotal' + index);
+        
+        if (select && select.value && qtyInput) {
+            const option = select.options[select.selectedIndex];
+            const price = parseFloat(option.dataset.price || 0);
+            const qty = parseInt(qtyInput.value || 0);
+            const stock = parseInt(option.dataset.stock || 0);
+            
+            if (qty > stock) {
+                qtyInput.setCustomValidity('Insufficient stock. Available: ' + stock);
+                totalInput.value = '';
+            } else {
+                qtyInput.setCustomValidity('');
+                const total = price * qty;
+                totalInput.value = '$' + total.toFixed(2);
+            }
+        } else {
+            totalInput.value = '';
+        }
+    }
+    
     // Initialize DataTable
     $(document).ready(function() {
         initDataTable('#workOrdersTable', {
@@ -461,6 +584,9 @@ require __DIR__ . '/header_modern.php';
         document.getElementById('status').value = 'pending';
         document.getElementById('startDate').value = '<?= date('Y-m-d') ?>';
         document.getElementById('notes').value = '';
+        // Clear parts container
+        document.getElementById('partsContainer').innerHTML = '';
+        partRowIndex = 0;
         // Remove validation classes
         document.querySelectorAll('#workOrderForm .is-invalid, #workOrderForm .is-valid').forEach(el => {
             el.classList.remove('is-invalid', 'is-valid');
