@@ -6,6 +6,7 @@ auth_require_login();
 
 $action = $_POST['action'] ?? '';
 $msg = null; $err = null;
+$successType = '';
 
 function validate_customer(array $d): array {
   $errors = [];
@@ -26,7 +27,8 @@ try {
       ':fn'=>trim($_POST['first_name']), ':ln'=>trim($_POST['last_name']), ':em'=>trim($_POST['email']), ':ph'=>trim($_POST['phone']),
       ':ad'=>trim($_POST['address'] ?? ''), ':ci'=>trim($_POST['city'] ?? ''), ':st'=>trim($_POST['state'] ?? ''), ':zip'=>trim($_POST['zip_code'] ?? ''),
     ]);
-    $msg = 'Customer added';
+    $msg = 'Customer added successfully';
+    $successType = 'create';
   } elseif ($action === 'update') {
     $id = (int)($_POST['customer_id'] ?? 0);
     [$ok, $m] = validate_customer($_POST);
@@ -36,7 +38,8 @@ try {
       ':fn'=>trim($_POST['first_name']), ':ln'=>trim($_POST['last_name']), ':em'=>trim($_POST['email']), ':ph'=>trim($_POST['phone']),
       ':ad'=>trim($_POST['address'] ?? ''), ':ci'=>trim($_POST['city'] ?? ''), ':st'=>trim($_POST['state'] ?? ''), ':zip'=>trim($_POST['zip_code'] ?? ''), ':id'=>$id,
     ]);
-    $msg = 'Customer updated';
+    $msg = 'Customer updated successfully';
+    $successType = 'update';
   } elseif ($action === 'delete') {
     $id = (int)($_POST['customer_id'] ?? 0);
     
@@ -62,6 +65,7 @@ try {
     $stmt = $pdo->prepare('DELETE FROM customer WHERE customer_id=:id');
     $stmt->execute([':id'=>$id]);
     $msg = 'Customer deleted successfully';
+    $successType = 'delete';
   }
 } catch (Throwable $t) { 
   // Better error message for foreign key constraints
@@ -93,62 +97,211 @@ $rows = $pdo->query('
 ')->fetchAll(PDO::FETCH_ASSOC);
 
 $pageTitle = 'Customers';
-require __DIR__ . '/header.php';
+$current_page = 'customers';
+require __DIR__ . '/header_modern.php';
 ?>
-  <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;">
-    <h2>Customers</h2>
-    <div><a href="index.php">Home</a></div>
-  </div>
-  <?php if ($msg): ?><p class="ok"><?= e($msg) ?></p><?php endif; ?>
-  <?php if ($err): ?><p class="err"><strong>Error:</strong> <?= e($err) ?></p><?php endif; ?>
 
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
-    <section>
-      <h3><?= $editRow ? 'Edit Customer #'.e((string)$editId) : 'Add Customer' ?></h3>
-      <form method="post">
-        <?php if ($editRow): ?><input type="hidden" name="action" value="update" /><input type="hidden" name="customer_id" value="<?= e((string)$editId) ?>" /><?php else: ?><input type="hidden" name="action" value="create" /><?php endif; ?>
-        <label>First name</label><br /><input name="first_name" value="<?= e($editRow['first_name'] ?? '') ?>" required />
-        <br /><label>Last name</label><br /><input name="last_name" value="<?= e($editRow['last_name'] ?? '') ?>" required />
-        <br /><label>Email</label><br /><input type="email" name="email" value="<?= e($editRow['email'] ?? '') ?>" required />
-        <br /><label>Phone</label><br /><input name="phone" value="<?= e($editRow['phone'] ?? '') ?>" required />
-        <br /><label>Address</label><br /><input name="address" value="<?= e($editRow['address'] ?? '') ?>" />
-        <br /><label>City</label><br /><input name="city" value="<?= e($editRow['city'] ?? '') ?>" />
-        <br /><label>State</label><br /><input name="state" maxlength="2" value="<?= e($editRow['state'] ?? '') ?>" />
-        <br /><label>ZIP</label><br /><input name="zip_code" value="<?= e($editRow['zip_code'] ?? '') ?>" />
-        <div style="margin-top:.5rem"></div>
-        <button type="submit"><?= $editRow ? 'Update' : 'Create' ?></button>
-        <?php if ($editRow): ?><a href="customers.php" style="margin-left:.5rem">Cancel</a><?php endif; ?>
-      </form>
-    </section>
+<!-- Page Header -->
+<div class="mf-content-header">
+    <div>
+        <h1 class="mf-page-title">Customers</h1>
+        <p class="text-muted">Manage customer information and records</p>
+    </div>
+    <div>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#customerModal" onclick="resetForm()">
+            <i class="fas fa-plus me-2"></i>Add Customer
+        </button>
+    </div>
+</div>
 
-    <section>
-      <h3>Recent Customers</h3>
-      <table class="table">
-        <thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Phone</th><th>Vehicles</th><th>Actions</th></tr></thead>
-        <tbody>
-          <?php foreach ($rows as $r): ?>
-            <tr>
-              <td><?= e((string)$r['customer_id']) ?></td>
-              <td><?= e($r['first_name'].' '.$r['last_name']) ?></td>
-              <td><?= e($r['email']) ?></td>
-              <td><?= e($r['phone']) ?></td>
-              <td><?= e((string)$r['vehicle_count']) ?></td>
-              <td>
-                <a href="customers.php?edit=<?= e((string)$r['customer_id']) ?>">Edit</a>
-                <?php if ($r['vehicle_count'] > 0 || $r['work_count'] > 0): ?>
-                  <button type="button" disabled title="Cannot delete: Has <?= e((string)$r['vehicle_count']) ?> vehicle(s) and <?= e((string)$r['work_count']) ?> work order(s)">Delete</button>
-                <?php else: ?>
-                  <form method="post" style="display:inline" onsubmit="return confirm('Delete customer #<?= e((string)$r['customer_id']) ?>?');">
-                    <input type="hidden" name="action" value="delete" />
-                    <input type="hidden" name="customer_id" value="<?= e((string)$r['customer_id']) ?>" />
-                    <button type="submit">Delete</button>
-                  </form>
-                <?php endif; ?>
-              </td>
-            </tr>
-          <?php endforeach; ?>
-        </tbody>
-      </table>
-    </section>
-  </div>
-<?php require __DIR__ . '/footer.php'; ?>
+<!-- Customers Table -->
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table id="customersTable" class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Phone</th>
+                        <th>City</th>
+                        <th>Vehicles</th>
+                        <th>Work Orders</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($rows as $r): ?>
+                    <tr>
+                        <td><strong>#<?= e((string)$r['customer_id']) ?></strong></td>
+                        <td><?= e($r['first_name'].' '.$r['last_name']) ?></td>
+                        <td><?= e($r['email']) ?></td>
+                        <td><?= e($r['phone']) ?></td>
+                        <td><?= e($r['city'] ?: 'N/A') ?></td>
+                        <td>
+                            <?php if ($r['vehicle_count'] > 0): ?>
+                                <span class="mf-badge mf-badge-primary"><?= e((string)$r['vehicle_count']) ?></span>
+                            <?php else: ?>
+                                <span class="mf-badge mf-badge-secondary">0</span>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <?php if ($r['work_count'] > 0): ?>
+                                <span class="mf-badge mf-badge-info"><?= e((string)$r['work_count']) ?></span>
+                            <?php else: ?>
+                                <span class="mf-badge mf-badge-secondary">0</span>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm mf-btn-icon" onclick="editCustomer(<?= htmlspecialchars(json_encode($r), ENT_QUOTES) ?>)" title="Edit">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <?php if ($r['vehicle_count'] > 0 || $r['work_count'] > 0): ?>
+                                <button class="btn btn-sm mf-btn-icon" disabled title="Cannot delete: Has <?= e((string)$r['vehicle_count']) ?> vehicle(s) and <?= e((string)$r['work_count']) ?> work order(s)">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            <?php else: ?>
+                                <button class="btn btn-sm mf-btn-icon" onclick="deleteCustomer(<?= e((string)$r['customer_id']) ?>, '<?= e($r['first_name'].' '.$r['last_name']) ?>')" title="Delete">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Customer Modal -->
+<div class="modal fade" id="customerModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form id="customerForm" method="post">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle">Add Customer</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="action" id="formAction" value="create">
+                    <input type="hidden" name="customer_id" id="customerId">
+                    
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="firstName" class="form-label">First Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="firstName" name="first_name" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="lastName" class="form-label">Last Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="lastName" name="last_name" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="email" class="form-label">Email <span class="text-danger">*</span></label>
+                            <input type="email" class="form-control" id="email" name="email" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="phone" class="form-label">Phone <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="phone" name="phone" required>
+                        </div>
+                        <div class="col-12">
+                            <label for="address" class="form-label">Address</label>
+                            <input type="text" class="form-control" id="address" name="address">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="city" class="form-label">City</label>
+                            <input type="text" class="form-control" id="city" name="city">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="state" class="form-label">State</label>
+                            <input type="text" class="form-control" id="state" name="state" maxlength="2">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="zipCode" class="form-label">ZIP Code</label>
+                            <input type="text" class="form-control" id="zipCode" name="zip_code">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i><span id="submitBtn">Save Customer</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Form (hidden) -->
+<form id="deleteForm" method="post" style="display:none;">
+    <input type="hidden" name="action" value="delete">
+    <input type="hidden" name="customer_id" id="deleteCustomerId">
+</form>
+
+<script>
+// Initialize DataTable
+$(document).ready(function() {
+    initDataTable('#customersTable', {
+        order: [[0, 'desc']],
+        columnDefs: [
+            { orderable: false, targets: 7 } // Actions column
+        ]
+    });
+});
+
+// Reset form for adding new customer
+function resetForm() {
+    document.getElementById('customerForm').reset();
+    document.getElementById('formAction').value = 'create';
+    document.getElementById('customerId').value = '';
+    document.getElementById('modalTitle').textContent = 'Add Customer';
+    document.getElementById('submitBtn').textContent = 'Save Customer';
+    // Remove validation classes
+    document.querySelectorAll('.is-invalid, .is-valid').forEach(el => {
+        el.classList.remove('is-invalid', 'is-valid');
+    });
+}
+
+// Edit customer
+function editCustomer(customer) {
+    document.getElementById('formAction').value = 'update';
+    document.getElementById('customerId').value = customer.customer_id;
+    document.getElementById('firstName').value = customer.first_name;
+    document.getElementById('lastName').value = customer.last_name;
+    document.getElementById('email').value = customer.email;
+    document.getElementById('phone').value = customer.phone;
+    document.getElementById('address').value = customer.address || '';
+    document.getElementById('city').value = customer.city || '';
+    document.getElementById('state').value = customer.state || '';
+    document.getElementById('zipCode').value = customer.zip_code || '';
+    document.getElementById('modalTitle').textContent = 'Edit Customer #' + customer.customer_id;
+    document.getElementById('submitBtn').textContent = 'Update Customer';
+    
+    // Show modal
+    new bootstrap.Modal(document.getElementById('customerModal')).show();
+}
+
+// Delete customer
+function deleteCustomer(id, name) {
+    confirmDelete(
+        `Are you sure you want to delete customer "${name}"?`,
+        function() {
+            document.getElementById('deleteCustomerId').value = id;
+            document.getElementById('deleteForm').submit();
+        }
+    );
+}
+
+// Show notifications from PHP
+<?php if ($msg): ?>
+    showSuccess('<?= addslashes($msg) ?>');
+<?php endif; ?>
+
+<?php if ($err): ?>
+    showError('<?= addslashes($err) ?>');
+<?php endif; ?>
+</script>
+
+<?php require __DIR__ . '/footer_modern.php'; ?>
