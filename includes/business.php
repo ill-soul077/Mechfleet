@@ -49,8 +49,13 @@ function addWorkPart(PDO $pdo, int $work_id, int $product_id, int $quantity, boo
     $sum = $pdo->prepare('SELECT ROUND(COALESCE(SUM(line_total),0),2) FROM work_parts WHERE work_id=:w');
     $sum->execute([':w'=>$work_id]);
     $parts_total = (float)$sum->fetchColumn();
-    $total_cost = $pdo->query("SELECT labor_cost FROM working_details WHERE work_id={$work_id}")->fetchColumn();
-    $total_cost = round((float)$total_cost + $parts_total, 2);
+    
+    // Get labor cost using prepared statement
+    $labor_stmt = $pdo->prepare('SELECT labor_cost FROM working_details WHERE work_id=:w');
+    $labor_stmt->execute([':w'=>$work_id]);
+    $labor_cost = (float)$labor_stmt->fetchColumn();
+    
+    $total_cost = round($labor_cost + $parts_total, 2);
     $pdo->prepare('UPDATE working_details SET parts_cost=:pc, total_cost=:tc WHERE work_id=:w')
         ->execute([':pc'=>$parts_total, ':tc'=>$total_cost, ':w'=>$work_id]);
 
