@@ -127,16 +127,27 @@ $vehicles  = $pdo->query('SELECT v.vehicle_id, CONCAT(v.year, " ", v.make, " ", 
 $mechanics = $pdo->query('SELECT mechanic_id, CONCAT(first_name, " ", last_name) AS name FROM mechanics WHERE active=1 ORDER BY mechanic_id')->fetchAll(PDO::FETCH_ASSOC);
 $services  = $pdo->query('SELECT service_id, service_name FROM service_details WHERE active=1 ORDER BY service_id')->fetchAll(PDO::FETCH_ASSOC);
 
+// Initialize variables
+$jobRow = null;
+$partsRows = [];
+$incomeRows = [];
+
 if ($id) {
   $job = $pdo->prepare('SELECT w.*, CONCAT(c.first_name, " ", c.last_name) AS customer_name, CONCAT(v.year, " ", v.make, " ", v.model) AS vehicle_info, CONCAT(m.first_name, " ", m.last_name) AS mechanic_name, s.service_name FROM working_details w JOIN customer c ON c.customer_id=w.customer_id JOIN vehicle v ON v.vehicle_id=w.vehicle_id JOIN mechanics m ON m.mechanic_id=w.assigned_mechanic_id JOIN service_details s ON s.service_id=w.service_id WHERE w.work_id=:id');
   $job->execute([':id'=>$id]);
   $jobRow = $job->fetch(PDO::FETCH_ASSOC);
-  $parts = $pdo->prepare('SELECT wp.*, p.sku, p.product_name FROM work_parts wp JOIN product_details p ON p.product_id=wp.product_id WHERE wp.work_id=:id ORDER BY p.product_name');
-  $parts->execute([':id'=>$id]);
-  $partsRows = $parts->fetchAll(PDO::FETCH_ASSOC);
-  $income = $pdo->prepare('SELECT * FROM income WHERE work_id=:id ORDER BY payment_date DESC');
-  $income->execute([':id'=>$id]);
-  $incomeRows = $income->fetchAll(PDO::FETCH_ASSOC);
+  
+  if ($jobRow) {
+    // Fetch parts for this work order
+    $parts = $pdo->prepare('SELECT wp.*, p.sku, p.product_name FROM work_parts wp JOIN product_details p ON p.product_id=wp.product_id WHERE wp.work_id=:id ORDER BY p.product_name');
+    $parts->execute([':id'=>$id]);
+    $partsRows = $parts->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Fetch income records
+    $income = $pdo->prepare('SELECT * FROM income WHERE work_id=:id ORDER BY payment_date DESC');
+    $income->execute([':id'=>$id]);
+    $incomeRows = $income->fetchAll(PDO::FETCH_ASSOC);
+  }
 }
 
 // Search functionality
