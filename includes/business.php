@@ -33,8 +33,9 @@ function addWorkPart(PDO $pdo, int $work_id, int $product_id, int $quantity, boo
     $existingQty = $chk->fetchColumn();
     if ($existingQty !== false) {
       $newQty = (int)$existingQty + $quantity;
-      $upd = $pdo->prepare('UPDATE work_parts SET quantity=:q, unit_price=:u, line_total=ROUND(:q * :u,2) WHERE work_id=:w AND product_id=:p');
-      $upd->execute([':q'=>$newQty, ':u'=>$unit, ':w'=>$work_id, ':p'=>$product_id]);
+      $newLineTotal = round($unit * $newQty, 2);
+      $upd = $pdo->prepare('UPDATE work_parts SET quantity=:q, unit_price=:u, line_total=:lt WHERE work_id=:w AND product_id=:p');
+      $upd->execute([':q'=>$newQty, ':u'=>$unit, ':lt'=>$newLineTotal, ':w'=>$work_id, ':p'=>$product_id]);
     } else {
       $ins = $pdo->prepare('INSERT INTO work_parts (work_id, product_id, quantity, unit_price, line_total) VALUES (:w,:p,:q,:u,:t)');
       $ins->execute([':w'=>$work_id, ':p'=>$product_id, ':q'=>$quantity, ':u'=>$unit, ':t'=>$line]);
@@ -48,8 +49,10 @@ function addWorkPart(PDO $pdo, int $work_id, int $product_id, int $quantity, boo
     $sum = $pdo->prepare('SELECT ROUND(COALESCE(SUM(line_total),0),2) FROM work_parts WHERE work_id=:w');
     $sum->execute([':w'=>$work_id]);
     $parts_total = (float)$sum->fetchColumn();
-    $pdo->prepare('UPDATE working_details SET parts_cost=:pc, total_cost=ROUND(labor_cost + :pc,2) WHERE work_id=:w')
-        ->execute([':pc'=>$parts_total, ':w'=>$work_id]);
+    $total_cost = $pdo->query("SELECT labor_cost FROM working_details WHERE work_id={$work_id}")->fetchColumn();
+    $total_cost = round((float)$total_cost + $parts_total, 2);
+    $pdo->prepare('UPDATE working_details SET parts_cost=:pc, total_cost=:tc WHERE work_id=:w')
+        ->execute([':pc'=>$parts_total, ':tc'=>$total_cost, ':w'=>$work_id]);
 
     $pdo->commit();
   } catch (Throwable $t) {
