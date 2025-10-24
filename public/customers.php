@@ -154,7 +154,7 @@ require __DIR__ . '/header_modern.php';
                             <?php endif; ?>
                         </td>
                         <td>
-                            <button class="btn btn-sm mf-btn-icon" onclick="editCustomer(<?= htmlspecialchars(json_encode($r), ENT_QUOTES) ?>)" title="Edit">
+                            <button class="btn btn-sm mf-btn-icon" onclick='editCustomer(<?= htmlspecialchars(json_encode($r), ENT_QUOTES) ?>)' title="Edit">
                                 <i class="fas fa-edit"></i>
                             </button>
                             <?php if ($r['vehicle_count'] > 0 || $r['work_count'] > 0): ?>
@@ -162,7 +162,7 @@ require __DIR__ . '/header_modern.php';
                                     <i class="fas fa-trash-alt"></i>
                                 </button>
                             <?php else: ?>
-                                <button class="btn btn-sm mf-btn-icon" onclick="deleteCustomer(<?= e((string)$r['customer_id']) ?>, '<?= e($r['first_name'].' '.$r['last_name']) ?>')" title="Delete">
+                                <button class="btn btn-sm mf-btn-icon" onclick='deleteCustomer(<?= (int)$r['customer_id'] ?>, <?= htmlspecialchars(json_encode($r['first_name'].' '.$r['last_name']), ENT_QUOTES) ?>)' title="Delete">
                                     <i class="fas fa-trash-alt"></i>
                                 </button>
                             <?php endif; ?>

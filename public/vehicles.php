@@ -132,7 +132,7 @@ require __DIR__ . '/header_modern.php';
                             <?php endif; ?>
                         </td>
                         <td>
-                            <button class="btn btn-sm mf-btn-icon" onclick="editVehicle(<?= htmlspecialchars(json_encode($r), ENT_QUOTES) ?>)" title="Edit">
+                            <button class="btn btn-sm mf-btn-icon" onclick='editVehicle(<?= htmlspecialchars(json_encode($r), ENT_QUOTES) ?>)' title="Edit">
                                 <i class="fas fa-edit"></i>
                             </button>
                             <?php if ($r['work_count'] > 0): ?>
@@ -140,7 +140,7 @@ require __DIR__ . '/header_modern.php';
                                     <i class="fas fa-trash-alt"></i>
                                 </button>
                             <?php else: ?>
-                                <button class="btn btn-sm mf-btn-icon" onclick="deleteVehicle(<?= e((string)$r['vehicle_id']) ?>, '<?= e($r['year'].' '.$r['make'].' '.$r['model']) ?>')" title="Delete">
+                                <button class="btn btn-sm mf-btn-icon" onclick='deleteVehicle(<?= (int)$r['vehicle_id'] ?>, <?= htmlspecialchars(json_encode($r['year'].' '.$r['make'].' '.$r['model']), ENT_QUOTES) ?>)' title="Delete">
                                     <i class="fas fa-trash-alt"></i>
                                 </button>
                             <?php endif; ?>
