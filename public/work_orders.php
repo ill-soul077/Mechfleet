@@ -27,11 +27,20 @@ try {
     $notes       = trim($_POST['notes'] ?? '');
     if (!$customer_id || !$vehicle_id || !$mechanic_id || !$service_id) throw new RuntimeException('All fields are required');
     $labor = compute_labor_cost($pdo, $mechanic_id, $service_id);
-    $stmt = $pdo->prepare('INSERT INTO working_details (customer_id,vehicle_id,assigned_mechanic_id,service_id,status,labor_cost,parts_cost,total_cost,start_date,notes) VALUES (:c,:v,:m,:s,:st,:lc,0.00,:lc,:sd,:n)');
-    $stmt->execute([':c'=>$customer_id, ':v'=>$vehicle_id, ':m'=>$mechanic_id, ':s'=>$service_id, ':st'=>$status, ':lc'=>$labor, ':sd'=>$start_date, ':n'=>$notes]);
+    $parts_cost = 0.00;
+    $total_cost = $labor + $parts_cost;
+    $stmt = $pdo->prepare('INSERT INTO working_details (customer_id,vehicle_id,assigned_mechanic_id,service_id,status,labor_cost,parts_cost,total_cost,start_date,notes) VALUES (:c,:v,:m,:s,:st,:lc,:pc,:tc,:sd,:n)');
+    $stmt->execute([':c'=>$customer_id, ':v'=>$vehicle_id, ':m'=>$mechanic_id, ':s'=>$service_id, ':st'=>$status, ':lc'=>$labor, ':pc'=>$parts_cost, ':tc'=>$total_cost, ':sd'=>$start_date, ':n'=>$notes]);
     $msg = 'Work order created successfully';
-    // Redirect to prevent form resubmission
-    header('Location: work_orders.php?success=created');
+    // Redirect to detail view to clearly show the newly created record
+    $newId = (int)$pdo->lastInsertId();
+    // Fallback: if lastInsertId is not available, go back to list
+    if ($newId > 0) {
+      header('Location: work_orders.php?id=' . $newId . '&success=created');
+    } else {
+      // Redirect to prevent form resubmission
+      header('Location: work_orders.php?success=created');
+    }
     exit;
   } elseif ($action === 'update') {
     $work_id = (int)($_POST['work_id'] ?? 0);
