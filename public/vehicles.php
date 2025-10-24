@@ -73,8 +73,11 @@ $whereConditions = [];
 $params = [];
 
 if ($search !== '') {
-  $whereConditions[] = "(CONCAT(c.first_name, ' ', c.last_name) LIKE :search OR v.vin LIKE :search OR v.license_plate LIKE :search OR v.model LIKE :search)";
+  $whereConditions[] = "(CONCAT(c.first_name, ' ', c.last_name) LIKE :search OR v.vin LIKE :search2 OR v.license_plate LIKE :search3 OR v.model LIKE :search4)";
   $params[':search'] = '%' . $search . '%';
+  $params[':search2'] = '%' . $search . '%';
+  $params[':search3'] = '%' . $search . '%';
+  $params[':search4'] = '%' . $search . '%';
 }
 
 if ($make !== '') {

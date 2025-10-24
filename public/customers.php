@@ -93,8 +93,10 @@ $whereConditions = [];
 $params = [];
 
 if ($search !== '') {
-  $whereConditions[] = "(CONCAT(c.first_name, ' ', c.last_name) LIKE :search OR c.email LIKE :search OR c.phone LIKE :search)";
+  $whereConditions[] = "(CONCAT(c.first_name, ' ', c.last_name) LIKE :search OR c.email LIKE :search2 OR c.phone LIKE :search3)";
   $params[':search'] = '%' . $search . '%';
+  $params[':search2'] = '%' . $search . '%';
+  $params[':search3'] = '%' . $search . '%';
 }
 
 if ($city !== '') {
