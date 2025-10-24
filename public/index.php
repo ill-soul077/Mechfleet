@@ -3,6 +3,9 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/util.php';
 
+// Require login
+auth_require_login();
+
 $pageTitle = 'Dashboard';
 $current_page = 'index';
 
@@ -28,48 +31,24 @@ try {
     $stmt = $pdo->query("
         SELECT 
             w.work_id,
-            w.date,
+            w.start_date,
             w.status,
             w.total_cost,
-            c.customer_name,
-            v.vehicle_name,
-            v.vehicle_no
+            CONCAT(c.first_name, ' ', c.last_name) as customer_name,
+            CONCAT(v.year, ' ', v.make, ' ', v.model) as vehicle_name,
+            v.license_plate as vehicle_no
         FROM working_details w
         LEFT JOIN customer c ON w.customer_id = c.customer_id
         LEFT JOIN vehicle v ON w.vehicle_id = v.vehicle_id
-        ORDER BY w.date DESC
+        ORDER BY w.work_id DESC
         LIMIT 10
     ");
     $recentWorkOrders = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Revenue by month (last 6 months)
-    $stmt = $pdo->query("
-        SELECT 
-            DATE_FORMAT(date, '%b') as month,
-            COALESCE(SUM(amount), 0) as revenue
-        FROM income
-        WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH)
-        GROUP BY YEAR(date), MONTH(date)
-        ORDER BY date ASC
-    ");
-    $revenueData = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Work order status distribution
-    $stmt = $pdo->query("
-        SELECT 
-            status,
-            COUNT(*) as count
-        FROM working_details
-        GROUP BY status
-    ");
-    $statusData = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
 } catch (PDOException $e) {
     $error = 'Failed to fetch dashboard data: ' . $e->getMessage();
     $totalCustomers = $activeWorkOrders = $monthlyRevenue = $totalMechanics = 0;
     $recentWorkOrders = [];
-    $revenueData = [];
-    $statusData = [];
 }
 
 require __DIR__ . '/header_modern.php';
@@ -158,33 +137,6 @@ require __DIR__ . '/header_modern.php';
     </div>
 </div>
 
-<!-- Charts Row -->
-<div class="row g-3 mb-4">
-    <!-- Revenue Chart -->
-    <div class="col-xl-8">
-        <div class="card">
-            <div class="card-header bg-white">
-                <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Revenue Trend</h5>
-            </div>
-            <div class="card-body">
-                <canvas id="revenueChart" height="80"></canvas>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Status Distribution Chart -->
-    <div class="col-xl-4">
-        <div class="card">
-            <div class="card-header bg-white">
-                <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Work Order Status</h5>
-            </div>
-            <div class="card-body">
-                <canvas id="statusChart"></canvas>
-            </div>
-        </div>
-    </div>
-</div>
-
 <!-- Recent Activity -->
 <div class="row">
     <div class="col-12">
@@ -216,7 +168,7 @@ require __DIR__ . '/header_modern.php';
                                 <?php foreach ($recentWorkOrders as $order): ?>
                                 <tr>
                                     <td><strong>#<?= e($order['work_id']) ?></strong></td>
-                                    <td><?= date('M d, Y', strtotime($order['date'])) ?></td>
+                                    <td><?= date('M d, Y', strtotime($order['start_date'])) ?></td>
                                     <td><?= e($order['customer_name']) ?></td>
                                     <td>
                                         <?= e($order['vehicle_name']) ?>
@@ -226,15 +178,15 @@ require __DIR__ . '/header_modern.php';
                                     <td>
                                         <?php
                                         $statusClass = 'secondary';
-                                        switch ($order['status']) {
-                                            case 'Completed': $statusClass = 'success'; break;
-                                            case 'In Progress': $statusClass = 'warning'; break;
-                                            case 'Pending': $statusClass = 'info'; break;
-                                            case 'Cancelled': $statusClass = 'danger'; break;
+                                        switch (strtolower($order['status'])) {
+                                            case 'completed': $statusClass = 'success'; break;
+                                            case 'in_progress': $statusClass = 'warning'; break;
+                                            case 'pending': $statusClass = 'info'; break;
+                                            case 'cancelled': $statusClass = 'danger'; break;
                                         }
                                         ?>
                                         <span class="mf-badge mf-badge-<?= $statusClass ?>">
-                                            <?= e($order['status']) ?>
+                                            <?= e(ucfirst($order['status'])) ?>
                                         </span>
                                     </td>
                                 </tr>
@@ -247,89 +199,5 @@ require __DIR__ . '/header_modern.php';
         </div>
     </div>
 </div>
-
-<!-- Chart.js Scripts -->
-<script>
-// Revenue Chart
-const revenueCtx = document.getElementById('revenueChart').getContext('2d');
-const revenueChart = new Chart(revenueCtx, {
-    type: 'line',
-    data: {
-        labels: <?= json_encode(array_column($revenueData, 'month')) ?>,
-        datasets: [{
-            label: 'Revenue',
-            data: <?= json_encode(array_column($revenueData, 'revenue')) ?>,
-            borderColor: '#3498db',
-            backgroundColor: 'rgba(52, 152, 219, 0.1)',
-            tension: 0.4,
-            fill: true,
-            pointRadius: 4,
-            pointHoverRadius: 6
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        plugins: {
-            legend: {
-                display: false
-            },
-            tooltip: {
-                callbacks: {
-                    label: function(context) {
-                        return 'Revenue: $' + context.parsed.y.toFixed(2);
-                    }
-                }
-            }
-        },
-        scales: {
-            y: {
-                beginAtZero: true,
-                ticks: {
-                    callback: function(value) {
-                        return '$' + value;
-                    }
-                }
-            }
-        }
-    }
-});
-
-// Status Chart
-const statusCtx = document.getElementById('statusChart').getContext('2d');
-const statusChart = new Chart(statusCtx, {
-    type: 'doughnut',
-    data: {
-        labels: <?= json_encode(array_column($statusData, 'status')) ?>,
-        datasets: [{
-            data: <?= json_encode(array_column($statusData, 'count')) ?>,
-            backgroundColor: [
-                '#27ae60', // Completed - green
-                '#f39c12', // In Progress - yellow
-                '#3498db', // Pending - blue
-                '#e74c3c'  // Cancelled - red
-            ],
-            borderWidth: 2,
-            borderColor: '#fff'
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        plugins: {
-            legend: {
-                position: 'bottom'
-            },
-            tooltip: {
-                callbacks: {
-                    label: function(context) {
-                        return context.label + ': ' + context.parsed + ' orders';
-                    }
-                }
-            }
-        }
-    }
-});
-</script>
 
 <?php require __DIR__ . '/footer_modern.php'; ?>

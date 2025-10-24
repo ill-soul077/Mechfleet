@@ -227,6 +227,9 @@ body {
   cursor: pointer;
   padding: 0.5rem 1rem;
   border-radius: 0.5rem;
+  background: transparent;
+  border: none;
+  transition: background-color var(--mf-transition);
 }
 
 .mf-user-menu:hover {
@@ -243,6 +246,7 @@ body {
   justify-content: center;
   color: white;
   font-weight: 600;
+  font-size: 0.9rem;
 }
 
 /* ============================================

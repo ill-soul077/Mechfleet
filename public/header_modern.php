@@ -127,16 +127,45 @@ $user_initials = strtoupper(substr($username, 0, 1));
         <!-- Notifications (placeholder) -->
         <button class="mf-toggle-btn" aria-label="Notifications" title="Notifications">
           <i class="fas fa-bell"></i>
+          <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.6rem; display: none;">
+            0
+          </span>
         </button>
         
         <!-- User Menu -->
-        <div class="mf-user-menu" id="userMenuToggle">
-          <div class="mf-user-avatar"><?= e($user_initials) ?></div>
-          <div class="d-none d-md-block">
-            <div class="fw-semibold" style="font-size: 0.9rem; color: #495057;"><?= e($username) ?></div>
-            <div style="font-size: 0.75rem; color: #6c757d;">Administrator</div>
-          </div>
-          <i class="fas fa-chevron-down" style="font-size: 0.75rem; color: #6c757d;"></i>
+        <div class="dropdown">
+          <button class="mf-user-menu" id="userMenuToggle" data-bs-toggle="dropdown" aria-expanded="false">
+            <div class="mf-user-avatar"><?= e($user_initials) ?></div>
+            <div class="d-none d-md-block">
+              <div class="fw-semibold" style="font-size: 0.9rem; color: #495057;"><?= e($username) ?></div>
+              <div style="font-size: 0.75rem; color: #6c757d;">Administrator</div>
+            </div>
+            <i class="fas fa-chevron-down" style="font-size: 0.75rem; color: #6c757d;"></i>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="min-width: 200px;">
+            <li>
+              <h6 class="dropdown-header">
+                <i class="fas fa-user-circle me-2"></i><?= e($username) ?>
+              </h6>
+            </li>
+            <li><hr class="dropdown-divider"></li>
+            <li>
+              <a class="dropdown-item" href="index.php">
+                <i class="fas fa-tachometer-alt me-2 text-primary"></i>Dashboard
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item" href="#" onclick="event.preventDefault(); alert('Profile settings coming soon!');">
+                <i class="fas fa-user-cog me-2 text-info"></i>Profile Settings
+              </a>
+            </li>
+            <li><hr class="dropdown-divider"></li>
+            <li>
+              <a class="dropdown-item text-danger" href="logout.php">
+                <i class="fas fa-sign-out-alt me-2"></i>Logout
+              </a>
+            </li>
+          </ul>
         </div>
       </div>
     </div>
