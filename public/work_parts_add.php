@@ -115,6 +115,11 @@ function savePart(ev){
   const msgDiv = document.getElementById('part-msg');
   const submitBtn = document.getElementById('submitBtn');
   
+  console.log('[savePart] Form submitted');
+  console.log('[savePart] work_id:', data.get('work_id'));
+  console.log('[savePart] product_id:', data.get('product_id'));
+  console.log('[savePart] quantity:', data.get('quantity'));
+  
   // Disable submit button
   submitBtn.disabled = true;
   
@@ -123,24 +128,33 @@ function savePart(ev){
   msgDiv.classList.remove('d-none');
   msgDiv.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Adding part to work order...';
   
-  console.log('Sending request to add part...');
+  console.log('[savePart] Sending request to api/add_work_part.php');
   
   fetch('api/add_work_part.php',{method:'POST', body:data})
     .then(r=> {
-      console.log('Response received:', r.status);
+      console.log('[savePart] Response status:', r.status, r.statusText);
       return r.text();
     })
     .then(text => {
-      console.log('Response text:', text);
+      console.log('[savePart] Response text:', text);
       try {
         const j = JSON.parse(text);
+        console.log('[savePart] Parsed JSON:', j);
         if(j.success){ 
           msgDiv.className = 'alert alert-success';
           msgDiv.innerHTML = '<i class="fas fa-check me-2"></i>Part added! Reloading...';
-          console.log('Success! Reloading page...');
-          // Force hard reload with timestamp to bypass cache
+          console.log('[savePart] Success! Closing modal and reloading page...');
+          // Close modal and reload parent page
           setTimeout(()=>{
-            window.location.href = window.location.href.split('?')[0] + '?id=' + data.get('work_id') + '&t=' + Date.now();
+            const modal = bootstrap.Modal.getInstance(document.getElementById('partsModal'));
+            if (modal) {
+              console.log('[savePart] Closing modal');
+              modal.hide();
+            }
+            // Reload the work order page with cache-busting timestamp
+            const reloadUrl = 'work_orders.php?id=' + data.get('work_id') + '&t=' + Date.now();
+            console.log('[savePart] Reloading to:', reloadUrl);
+            window.top.location.href = reloadUrl;
           }, 500); 
         } else { 
           msgDiv.className = 'alert alert-danger';

@@ -18,11 +18,16 @@ $allow_backorder = isset($_POST['allow_backorder']) && (($_POST['allow_backorder
 
 try {
   if (!$work_id || !$product_id) {
+    error_log("add_work_part: Invalid input - work_id={$work_id}, product_id={$product_id}");
     throw new RuntimeException('Invalid input: work_id=' . $work_id . ', product_id=' . $product_id);
   }
   
+  error_log("add_work_part: Adding part - work_id={$work_id}, product_id={$product_id}, qty={$qty}");
+  
   // Add the part
   addWorkPart($pdo, $work_id, $product_id, $qty, $allow_backorder);
+  
+  error_log("add_work_part: Success - work_id={$work_id}, product_id={$product_id}, qty={$qty}");
   
   // Return success
   echo json_encode(['success'=>true, 'work_id'=>$work_id, 'product_id'=>$product_id, 'quantity'=>$qty]);
