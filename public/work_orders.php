@@ -733,12 +733,25 @@ require __DIR__ . '/header_modern.php';
 
   <script>
     function openPartsModal(workId){
+      console.log('[openPartsModal] Opening modal for work order:', workId);
       const modal = new bootstrap.Modal(document.getElementById('partsModal'));
       const body = document.getElementById('modal-body');
       body.textContent='Loading...';
       modal.show();
+      console.log('[openPartsModal] Fetching form for work_id:', workId);
       fetch('work_parts_add.php?work_id='+encodeURIComponent(workId))
-        .then(r=>r.text()).then(html=>{ body.innerHTML = html; });
+        .then(r=>{
+          console.log('[openPartsModal] Response received, status:', r.status);
+          return r.text();
+        })
+        .then(html=>{ 
+          console.log('[openPartsModal] Form HTML loaded, length:', html.length);
+          body.innerHTML = html; 
+        })
+        .catch(e=>{
+          console.error('[openPartsModal] Error loading form:', e);
+          body.innerHTML = '<div class="alert alert-danger">Error loading form: ' + e.message + '</div>';
+        });
     }
   </script>
 
