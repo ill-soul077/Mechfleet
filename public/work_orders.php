@@ -39,53 +39,30 @@ try {
       throw new RuntimeException('All fields are required');
     }
     
-    $pdo->beginTransaction();
-    try {
-      // Calculate labor cost
-      $labor = compute_labor_cost($pdo, $mechanic_id, $service_id);
-      
-      // Insert work order first
-      $stmt = $pdo->prepare('INSERT INTO working_details (customer_id,vehicle_id,assigned_mechanic_id,service_id,status,labor_cost,parts_cost,total_cost,start_date,notes) VALUES (:c,:v,:m,:s,:st,:lc,0,0,:sd,:n)');
-      $stmt->execute([':c'=>$customer_id, ':v'=>$vehicle_id, ':m'=>$mechanic_id, ':s'=>$service_id, ':st'=>$status, ':lc'=>$labor, ':sd'=>$start_date, ':n'=>$notes]);
-      $newId = (int)$pdo->lastInsertId();
-      
-      // Add parts if provided
-      $parts_cost = 0.00;
-      if (!empty($part_products) && is_array($part_products)) {
-        foreach ($part_products as $index => $product_id) {
-          $product_id = (int)$product_id;
-          $quantity = (int)($part_quantities[$index] ?? 0);
-          
-          if ($product_id > 0 && $quantity > 0) {
-            // Add part using the existing function
-            addWorkPart($pdo, $newId, $product_id, $quantity, false);
-          }
+    // Calculate labor cost
+    $labor = compute_labor_cost($pdo, $mechanic_id, $service_id);
+    
+    // Insert work order first
+    $stmt = $pdo->prepare('INSERT INTO working_details (customer_id,vehicle_id,assigned_mechanic_id,service_id,status,labor_cost,parts_cost,total_cost,start_date,notes) VALUES (:c,:v,:m,:s,:st,:lc,0,:lc,:sd,:n)');
+    $stmt->execute([':c'=>$customer_id, ':v'=>$vehicle_id, ':m'=>$mechanic_id, ':s'=>$service_id, ':st'=>$status, ':lc'=>$labor, ':sd'=>$start_date, ':n'=>$notes]);
+    $newId = (int)$pdo->lastInsertId();
+    
+    // Add parts if provided (each addWorkPart handles its own transaction)
+    if (!empty($part_products) && is_array($part_products)) {
+      foreach ($part_products as $index => $product_id) {
+        $product_id = (int)$product_id;
+        $quantity = (int)($part_quantities[$index] ?? 0);
+        
+        if ($product_id > 0 && $quantity > 0) {
+          // Add part using the existing function (it handles its own transaction)
+          addWorkPart($pdo, $newId, $product_id, $quantity, false);
         }
-        
-        // Get updated parts cost
-        $sum = $pdo->prepare('SELECT COALESCE(SUM(line_total), 0) FROM work_parts WHERE work_id = :w');
-        $sum->execute([':w' => $newId]);
-        $parts_cost = (float)$sum->fetchColumn();
-        
-        // Update the work order with correct totals
-        $total_cost = $labor + $parts_cost;
-        $upd = $pdo->prepare('UPDATE working_details SET parts_cost = :pc, total_cost = :tc WHERE work_id = :w');
-        $upd->execute([':pc' => $parts_cost, ':tc' => $total_cost, ':w' => $newId]);
-      } else {
-        // No parts, just update total
-        $upd = $pdo->prepare('UPDATE working_details SET total_cost = :tc WHERE work_id = :w');
-        $upd->execute([':tc' => $labor, ':w' => $newId]);
       }
-      
-      $pdo->commit();
-      $msg = 'Work order created successfully';
-      header('Location: work_orders.php?id=' . $newId . '&success=created');
-      exit;
-      
-    } catch (Throwable $e) {
-      $pdo->rollBack();
-      throw $e;
     }
+    
+    $msg = 'Work order created successfully';
+    header('Location: work_orders.php?id=' . $newId . '&success=created');
+    exit;
   } elseif ($action === 'update') {
     $work_id = (int)($_POST['work_id'] ?? 0);
     $status = trim($_POST['status'] ?? 'pending');
