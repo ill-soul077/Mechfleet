@@ -23,6 +23,7 @@ function compute_labor_cost(PDO $pdo, int $mechanic_id, int $service_id): float 
 
 try {
   if ($action === 'create') {
+    error_log("=== CREATE WORK ORDER START ===");
     $customer_id = (int)($_POST['customer_id'] ?? 0);
     $vehicle_id  = (int)($_POST['vehicle_id'] ?? 0);
     $mechanic_id = (int)($_POST['assigned_mechanic_id'] ?? 0);
@@ -31,37 +32,44 @@ try {
     $status      = trim($_POST['status'] ?? 'pending');
     $notes       = trim($_POST['notes'] ?? '');
     
+    error_log("Customer: $customer_id, Vehicle: $vehicle_id, Mechanic: $mechanic_id, Service: $service_id");
+    
     // Get parts data from form
     $part_products = $_POST['part_product'] ?? [];
     $part_quantities = $_POST['part_quantity'] ?? [];
     
     if (!$customer_id || !$vehicle_id || !$mechanic_id || !$service_id) {
+      error_log("ERROR: Missing required fields");
       throw new RuntimeException('All fields are required');
     }
     
     // Calculate labor cost
     $labor = compute_labor_cost($pdo, $mechanic_id, $service_id);
+    error_log("Labor cost calculated: $labor");
     
     // Insert work order first
     $stmt = $pdo->prepare('INSERT INTO working_details (customer_id,vehicle_id,assigned_mechanic_id,service_id,status,labor_cost,parts_cost,total_cost,start_date,notes) VALUES (:c,:v,:m,:s,:st,:lc,0,:lc,:sd,:n)');
     $stmt->execute([':c'=>$customer_id, ':v'=>$vehicle_id, ':m'=>$mechanic_id, ':s'=>$service_id, ':st'=>$status, ':lc'=>$labor, ':sd'=>$start_date, ':n'=>$notes]);
     $newId = (int)$pdo->lastInsertId();
+    error_log("Work order created with ID: $newId");
     
     // Add parts if provided (each addWorkPart handles its own transaction)
     if (!empty($part_products) && is_array($part_products)) {
+      error_log("Adding " . count($part_products) . " parts");
       foreach ($part_products as $index => $product_id) {
         $product_id = (int)$product_id;
         $quantity = (int)($part_quantities[$index] ?? 0);
         
         if ($product_id > 0 && $quantity > 0) {
+          error_log("Adding part: product_id=$product_id, qty=$quantity");
           // Add part using the existing function (it handles its own transaction)
           addWorkPart($pdo, $newId, $product_id, $quantity, false);
         }
       }
     }
     
-    $msg = 'Work order created successfully';
-    header('Location: work_orders.php?id=' . $newId . '&success=created');
+    error_log("Work order creation complete. Redirecting to list with success message");
+    header('Location: work_orders.php?success=created&new_id=' . $newId);
     exit;
   } elseif ($action === 'update') {
     $work_id = (int)($_POST['work_id'] ?? 0);
@@ -233,7 +241,21 @@ if (!empty($params)) {
 $pageTitle = $id ? ('Work Order #'.$id) : 'Work Orders';
 $current_page = 'work_orders';
 require __DIR__ . '/header_modern.php';
+
+// Check for success message
+$successMsg = '';
+if (isset($_GET['success']) && $_GET['success'] === 'created') {
+  $newWorkOrderId = (int)($_GET['new_id'] ?? 0);
+  $successMsg = 'Work order ' . ($newWorkOrderId ? "#$newWorkOrderId" : '') . ' created successfully!';
+}
 ?>
+
+  <?php if ($successMsg): ?>
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+      <i class="fas fa-check-circle me-2"></i><?= htmlspecialchars($successMsg) ?>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <?php endif; ?>
 
   <?php if (!$id): ?>
     <!-- Page Header -->
