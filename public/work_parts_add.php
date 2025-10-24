@@ -138,7 +138,10 @@ function savePart(ev){
           msgDiv.className = 'alert alert-success';
           msgDiv.innerHTML = '<i class="fas fa-check me-2"></i>Part added! Reloading...';
           console.log('Success! Reloading page...');
-          setTimeout(()=>window.location.reload(true), 800); 
+          // Force hard reload with timestamp to bypass cache
+          setTimeout(()=>{
+            window.location.href = window.location.href.split('?')[0] + '?id=' + data.get('work_id') + '&t=' + Date.now();
+          }, 500); 
         } else { 
           msgDiv.className = 'alert alert-danger';
           msgDiv.innerHTML = '<i class="fas fa-exclamation-circle me-2"></i>Error: '+(j.error||'Unknown error');
