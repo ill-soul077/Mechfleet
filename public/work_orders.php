@@ -29,7 +29,7 @@ try {
     $labor = compute_labor_cost($pdo, $mechanic_id, $service_id);
     $stmt = $pdo->prepare('INSERT INTO working_details (customer_id,vehicle_id,assigned_mechanic_id,service_id,status,labor_cost,parts_cost,total_cost,start_date,notes) VALUES (:c,:v,:m,:s,:st,:lc,0.00,:lc,:sd,:n)');
     $stmt->execute([':c'=>$customer_id, ':v'=>$vehicle_id, ':m'=>$mechanic_id, ':s'=>$service_id, ':st'=>$status, ':lc'=>$labor, ':sd'=>$start_date, ':n'=>$notes]);
-    $msg = 'Work order created';
+    $msg = 'Work order created successfully';
   } elseif ($action === 'update') {
     $work_id = (int)($_POST['work_id'] ?? 0);
     $status = trim($_POST['status'] ?? 'pending');
@@ -41,7 +41,46 @@ try {
     if ($status === 'completed') {
       createInvoiceForWork($pdo, $work_id);
     }
-    $msg = 'Work order updated';
+    $msg = 'Work order updated successfully';
+  } elseif ($action === 'delete') {
+    $work_id = (int)($_POST['work_id'] ?? 0);
+    
+    // Get work order details
+    $checkStmt = $pdo->prepare('SELECT status, total_cost FROM working_details WHERE work_id = :id');
+    $checkStmt->execute([':id' => $work_id]);
+    $workOrder = $checkStmt->fetch(PDO::FETCH_ASSOC);
+    
+    if (!$workOrder) {
+      throw new RuntimeException('Work order not found');
+    }
+    
+    // Only allow deletion of completed work orders
+    if ($workOrder['status'] !== 'completed') {
+      throw new RuntimeException('Can only delete completed work orders. Current status: ' . $workOrder['status']);
+    }
+    
+    // Start transaction
+    $pdo->beginTransaction();
+    
+    try {
+      // Delete related work parts first
+      $stmt = $pdo->prepare('DELETE FROM work_parts WHERE work_id = :id');
+      $stmt->execute([':id' => $work_id]);
+      
+      // Delete related income records
+      $stmt = $pdo->prepare('DELETE FROM income WHERE work_id = :id');
+      $stmt->execute([':id' => $work_id]);
+      
+      // Delete the work order
+      $stmt = $pdo->prepare('DELETE FROM working_details WHERE work_id = :id');
+      $stmt->execute([':id' => $work_id]);
+      
+      $pdo->commit();
+      $msg = 'Work order deleted successfully and removed from records';
+    } catch (Throwable $e) {
+      $pdo->rollBack();
+      throw $e;
+    }
   }
 } catch (Throwable $t) { $err = $t->getMessage(); }
 
@@ -130,6 +169,15 @@ require __DIR__ . '/header_modern.php';
                                 <a href="work_orders.php?id=<?= e((string)$r['work_id']) ?>" class="btn btn-sm mf-btn-icon" title="View Details">
                                     <i class="fas fa-eye"></i>
                                 </a>
+                                <?php if ($r['status'] === 'completed'): ?>
+                                    <button class="btn btn-sm mf-btn-icon text-danger" onclick='deleteWorkOrder(<?= (int)$r['work_id'] ?>, <?= htmlspecialchars(json_encode($r['customer'] . " - " . $r['vehicle']), ENT_QUOTES) ?>)' title="Delete (Completed)">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                <?php else: ?>
+                                    <button class="btn btn-sm mf-btn-icon" disabled title="Cannot delete: Work order is <?= e($r['status']) ?>">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                <?php endif; ?>
                             </td>
                         </tr>
                         <?php endforeach; ?>
@@ -143,7 +191,7 @@ require __DIR__ . '/header_modern.php';
     <div class="modal fade" id="workOrderModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
-                <form method="post">
+                <form id="workOrderForm" method="post">
                     <div class="modal-header">
                         <h5 class="modal-title">Create Work Order</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -218,6 +266,12 @@ require __DIR__ . '/header_modern.php';
         </div>
     </div>
 
+    <!-- Delete Form (hidden) -->
+    <form id="deleteForm" method="post" style="display:none;">
+        <input type="hidden" name="action" value="delete">
+        <input type="hidden" name="work_id" id="deleteWorkOrderId">
+    </form>
+
     <script>
     // Initialize DataTable
     $(document).ready(function() {
@@ -229,7 +283,9 @@ require __DIR__ . '/header_modern.php';
         });
     });
 
+    // Reset form for creating new work order
     function resetForm() {
+        document.getElementById('workOrderForm').reset();
         document.getElementById('customerId').value = '';
         document.getElementById('vehicleId').value = '';
         document.getElementById('mechanicId').value = '';
@@ -237,11 +293,31 @@ require __DIR__ . '/header_modern.php';
         document.getElementById('status').value = 'pending';
         document.getElementById('startDate').value = '<?= date('Y-m-d') ?>';
         document.getElementById('notes').value = '';
+        // Remove validation classes
+        document.querySelectorAll('#workOrderForm .is-invalid, #workOrderForm .is-valid').forEach(el => {
+            el.classList.remove('is-invalid', 'is-valid');
+        });
+    }
+
+    // Delete work order
+    function deleteWorkOrder(id, description) {
+        confirmDelete(
+            `Are you sure you want to delete this completed work order?\n\n${description}\n\nThis will remove the work order and all related records (parts, payments) from the database.`,
+            function() {
+                document.getElementById('deleteWorkOrderId').value = id;
+                document.getElementById('deleteForm').submit();
+            }
+        );
     }
 
     // Show notifications from PHP
     <?php if ($msg): ?>
         showSuccess('<?= addslashes($msg) ?>');
+        // Close modal after successful creation
+        setTimeout(function() {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('workOrderModal'));
+            if (modal) modal.hide();
+        }, 100);
     <?php endif; ?>
 
     <?php if ($err): ?>
