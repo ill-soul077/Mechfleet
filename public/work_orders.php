@@ -68,171 +68,439 @@ if ($id) {
 $list = $pdo->query('SELECT w.work_id, w.status, w.start_date, w.completion_date, w.total_cost, CONCAT(c.first_name, " ", c.last_name) AS customer, CONCAT(v.year, " ", v.make, " ", v.model) AS vehicle, s.service_name FROM working_details w JOIN customer c ON c.customer_id=w.customer_id JOIN vehicle v ON v.vehicle_id=w.vehicle_id JOIN service_details s ON s.service_id=w.service_id ORDER BY w.work_id DESC LIMIT 100')->fetchAll(PDO::FETCH_ASSOC);
 
 $pageTitle = $id ? ('Work Order #'.$id) : 'Work Orders';
-require __DIR__ . '/header.php';
+$current_page = 'work_orders';
+require __DIR__ . '/header_modern.php';
 ?>
-  <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;">
-    <h2><?= e($pageTitle) ?></h2>
-    <div><a href="index.php">Home</a></div>
-  </div>
-  <?php if ($msg): ?><p class="ok"><?= e($msg) ?></p><?php endif; ?>
-  <?php if ($err): ?><p class="err"><strong>Error:</strong> <?= e($err) ?></p><?php endif; ?>
 
   <?php if (!$id): ?>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
-      <section>
-        <h3>Create Work Order</h3>
-        <form method="post">
-          <input type="hidden" name="action" value="create" />
-          <label>Customer</label><br />
-          <select name="customer_id" required>
-            <option value="">-- choose --</option>
-            <?php foreach ($customers as $c): ?>
-              <option value="<?= e((string)$c['customer_id']) ?>"><?= e($c['name']) ?></option>
-            <?php endforeach; ?>
-          </select>
-          <br /><label>Vehicle</label><br />
-          <select name="vehicle_id" required>
-            <option value="">-- choose --</option>
-            <?php foreach ($vehicles as $v): ?>
-              <option value="<?= e((string)$v['vehicle_id']) ?>"><?= e($v['label']) ?></option>
-            <?php endforeach; ?>
-          </select>
-          <br /><label>Mechanic</label><br />
-          <select name="assigned_mechanic_id" required>
-            <?php foreach ($mechanics as $m): ?>
-              <option value="<?= e((string)$m['mechanic_id']) ?>"><?= e($m['name']) ?></option>
-            <?php endforeach; ?>
-          </select>
-          <br /><label>Service</label><br />
-          <select name="service_id" required>
-            <?php foreach ($services as $s): ?>
-              <option value="<?= e((string)$s['service_id']) ?>"><?= e($s['service_name']) ?></option>
-            <?php endforeach; ?>
-          </select>
-          <br /><label>Status</label><br />
-          <select name="status">
-            <option>pending</option>
-            <option>in_progress</option>
-            <option>completed</option>
-            <option>cancelled</option>
-          </select>
-          <br /><label>Start date</label><br /><input type="date" name="start_date" value="<?= e(date('Y-m-d')) ?>" />
-          <br /><label>Notes</label><br /><input name="notes" />
-          <div style="margin-top:.5rem"></div>
-          <button type="submit">Create</button>
-        </form>
-      </section>
-
-      <section>
-        <h3>Recent Work Orders</h3>
-        <table class="table">
-          <thead><tr><th>ID</th><th>Customer</th><th>Vehicle</th><th>Service</th><th>Status</th><th>Total</th><th>Actions</th></tr></thead>
-          <tbody>
-            <?php foreach ($list as $r): ?>
-              <tr>
-                <td><?= e((string)$r['work_id']) ?></td>
-                <td><?= e($r['customer']) ?></td>
-                <td><?= e($r['vehicle']) ?></td>
-                <td><?= e($r['service_name']) ?></td>
-                <td><?= e($r['status']) ?></td>
-                <td><?= e((string)$r['total_cost']) ?></td>
-                <td><a href="work_orders.php?id=<?= e((string)$r['work_id']) ?>">Details</a></td>
-              </tr>
-            <?php endforeach; ?>
-          </tbody>
-        </table>
-      </section>
+    <!-- Page Header -->
+    <div class="mf-content-header">
+        <div>
+            <h1 class="mf-page-title">Work Orders</h1>
+            <p class="text-muted">Manage repair work orders and service requests</p>
+        </div>
+        <div>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#workOrderModal" onclick="resetForm()">
+                <i class="fas fa-plus me-2"></i>Create Work Order
+            </button>
+        </div>
     </div>
+
+    <!-- Work Orders Table -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table id="workOrdersTable" class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Customer</th>
+                            <th>Vehicle</th>
+                            <th>Service</th>
+                            <th>Start Date</th>
+                            <th>Status</th>
+                            <th>Total Cost</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($list as $r): ?>
+                        <tr>
+                            <td><strong>#<?= e((string)$r['work_id']) ?></strong></td>
+                            <td><?= e($r['customer']) ?></td>
+                            <td><?= e($r['vehicle']) ?></td>
+                            <td><?= e($r['service_name']) ?></td>
+                            <td><?= date('M d, Y', strtotime($r['start_date'])) ?></td>
+                            <td>
+                                <?php
+                                $statusClass = 'secondary';
+                                switch ($r['status']) {
+                                    case 'completed': $statusClass = 'success'; break;
+                                    case 'in_progress': $statusClass = 'warning'; break;
+                                    case 'pending': $statusClass = 'info'; break;
+                                    case 'cancelled': $statusClass = 'danger'; break;
+                                }
+                                ?>
+                                <span class="mf-badge mf-badge-<?= $statusClass ?>">
+                                    <?= e(ucfirst($r['status'])) ?>
+                                </span>
+                            </td>
+                            <td>$<?= number_format($r['total_cost'], 2) ?></td>
+                            <td>
+                                <a href="work_orders.php?id=<?= e((string)$r['work_id']) ?>" class="btn btn-sm mf-btn-icon" title="View Details">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Work Order Modal -->
+    <div class="modal fade" id="workOrderModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <form method="post">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Create Work Order</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" name="action" value="create">
+                        
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="customerId" class="form-label">Customer <span class="text-danger">*</span></label>
+                                <select class="form-select" id="customerId" name="customer_id" required>
+                                    <option value="">Select Customer</option>
+                                    <?php foreach ($customers as $c): ?>
+                                        <option value="<?= e((string)$c['customer_id']) ?>"><?= e($c['name']) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="vehicleId" class="form-label">Vehicle <span class="text-danger">*</span></label>
+                                <select class="form-select" id="vehicleId" name="vehicle_id" required>
+                                    <option value="">Select Vehicle</option>
+                                    <?php foreach ($vehicles as $v): ?>
+                                        <option value="<?= e((string)$v['vehicle_id']) ?>"><?= e($v['label']) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="mechanicId" class="form-label">Assigned Mechanic <span class="text-danger">*</span></label>
+                                <select class="form-select" id="mechanicId" name="assigned_mechanic_id" required>
+                                    <option value="">Select Mechanic</option>
+                                    <?php foreach ($mechanics as $m): ?>
+                                        <option value="<?= e((string)$m['mechanic_id']) ?>"><?= e($m['name']) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="serviceId" class="form-label">Service <span class="text-danger">*</span></label>
+                                <select class="form-select" id="serviceId" name="service_id" required>
+                                    <option value="">Select Service</option>
+                                    <?php foreach ($services as $s): ?>
+                                        <option value="<?= e((string)$s['service_id']) ?>"><?= e($s['service_name']) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="status" class="form-label">Status <span class="text-danger">*</span></label>
+                                <select class="form-select" id="status" name="status" required>
+                                    <option value="pending">Pending</option>
+                                    <option value="in_progress">In Progress</option>
+                                    <option value="completed">Completed</option>
+                                    <option value="cancelled">Cancelled</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="startDate" class="form-label">Start Date <span class="text-danger">*</span></label>
+                                <input type="date" class="form-control" id="startDate" name="start_date" value="<?= date('Y-m-d') ?>" required>
+                            </div>
+                            <div class="col-12">
+                                <label for="notes" class="form-label">Notes</label>
+                                <textarea class="form-control" id="notes" name="notes" rows="3"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-2"></i>Create Work Order
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // Initialize DataTable
+    $(document).ready(function() {
+        initDataTable('#workOrdersTable', {
+            order: [[0, 'desc']],
+            columnDefs: [
+                { orderable: false, targets: 7 } // Actions column
+            ]
+        });
+    });
+
+    function resetForm() {
+        document.getElementById('customerId').value = '';
+        document.getElementById('vehicleId').value = '';
+        document.getElementById('mechanicId').value = '';
+        document.getElementById('serviceId').value = '';
+        document.getElementById('status').value = 'pending';
+        document.getElementById('startDate').value = '<?= date('Y-m-d') ?>';
+        document.getElementById('notes').value = '';
+    }
+
+    // Show notifications from PHP
+    <?php if ($msg): ?>
+        showSuccess('<?= addslashes($msg) ?>');
+    <?php endif; ?>
+
+    <?php if ($err): ?>
+        showError('<?= addslashes($err) ?>');
+    <?php endif; ?>
+    </script>
   <?php else: ?>
     <?php if (!$jobRow): ?>
-      <p class="err">Work order not found.</p>
+      <div class="alert alert-danger">
+        <i class="fas fa-exclamation-circle me-2"></i>Work order not found.
+      </div>
+      <a href="work_orders.php" class="btn btn-secondary"><i class="fas fa-arrow-left me-2"></i>Back to List</a>
     <?php else: ?>
-      <section>
-        <h3>Details</h3>
-        <p><strong>Customer:</strong> <?= e($jobRow['customer_name']) ?> — <strong>Vehicle:</strong> <?= e($jobRow['vehicle_info']) ?></p>
-        <p><strong>Mechanic:</strong> <?= e($jobRow['mechanic_name']) ?> — <strong>Service:</strong> <?= e($jobRow['service_name']) ?></p>
-        <p><strong>Status:</strong> <?= e($jobRow['status']) ?> — <strong>Start:</strong> <?= e($jobRow['start_date']) ?> — <strong>Complete:</strong> <?= e((string)$jobRow['completion_date']) ?></p>
-        <p><strong>Labor:</strong> $<?= e((string)$jobRow['labor_cost']) ?> — <strong>Parts:</strong> $<?= e((string)$jobRow['parts_cost']) ?> — <strong>Total:</strong> $<?= e((string)$jobRow['total_cost']) ?></p>
-        <form method="post" style="margin-top:.5rem">
-          <input type="hidden" name="action" value="update" />
-          <input type="hidden" name="work_id" value="<?= e((string)$id) ?>" />
-          <label>Status</label>
-          <select name="status">
-            <?php foreach (['pending','in_progress','completed','cancelled'] as $st): $sel = $st===$jobRow['status']?'selected':''; ?>
-              <option <?= $sel ?>><?= e($st) ?></option>
-            <?php endforeach; ?>
-          </select>
-          <label>Completion date</label>
-          <input type="date" name="completion_date" value="<?= e((string)$jobRow['completion_date']) ?>" />
-          <label>Notes</label>
-          <input name="notes" value="<?= e($jobRow['notes'] ?? '') ?>" />
-          <button type="submit">Save</button>
-          <a href="work_orders.php" style="margin-left:.5rem">Back</a>
-        </form>
-      </section>
+      <!-- Page Header -->
+      <div class="mf-content-header">
+          <div>
+              <h1 class="mf-page-title">Work Order #<?= $id ?></h1>
+              <p class="text-muted">View and update work order details</p>
+          </div>
+          <div>
+              <a href="work_orders.php" class="btn btn-secondary">
+                  <i class="fas fa-arrow-left me-2"></i>Back to List
+              </a>
+          </div>
+      </div>
 
-      <section>
-        <h3>Parts</h3>
-        <button type="button" onclick="openPartsModal(<?= (int)$id ?>)">Add Part</button>
-        <table class="table" style="margin-top:.5rem">
-          <thead><tr><th>SKU</th><th>Name</th><th>Qty</th><th>Unit</th><th>Total</th></tr></thead>
-          <tbody>
-            <?php foreach ($partsRows as $p): ?>
-              <tr>
-                <td><?= e($p['sku']) ?></td>
-                <td><?= e($p['product_name']) ?></td>
-                <td><?= e((string)$p['quantity']) ?></td>
-                <td><?= e((string)$p['unit_price']) ?></td>
-                <td><?= e((string)$p['line_total']) ?></td>
-              </tr>
-            <?php endforeach; ?>
-          </tbody>
-        </table>
-      </section>
+      <!-- Work Order Details -->
+      <div class="row g-3 mb-4">
+        <div class="col-md-6">
+          <div class="card">
+            <div class="card-header bg-white">
+              <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Order Information</h5>
+            </div>
+            <div class="card-body">
+              <table class="table table-borderless mb-0">
+                <tr>
+                  <td width="40%"><strong>Customer:</strong></td>
+                  <td><?= e($jobRow['customer_name']) ?></td>
+                </tr>
+                <tr>
+                  <td><strong>Vehicle:</strong></td>
+                  <td><?= e($jobRow['vehicle_info']) ?></td>
+                </tr>
+                <tr>
+                  <td><strong>Mechanic:</strong></td>
+                  <td><?= e($jobRow['mechanic_name']) ?></td>
+                </tr>
+                <tr>
+                  <td><strong>Service:</strong></td>
+                  <td><?= e($jobRow['service_name']) ?></td>
+                </tr>
+                <tr>
+                  <td><strong>Start Date:</strong></td>
+                  <td><?= date('M d, Y', strtotime($jobRow['start_date'])) ?></td>
+                </tr>
+                <tr>
+                  <td><strong>Completion:</strong></td>
+                  <td><?= $jobRow['completion_date'] ? date('M d, Y', strtotime($jobRow['completion_date'])) : 'Not completed' ?></td>
+                </tr>
+              </table>
+            </div>
+          </div>
+        </div>
 
-      <section>
-        <h3>Payments</h3>
-        <?php if (empty($incomeRows)): ?><p class="muted">No income records yet.</p><?php endif; ?>
-        <?php if (!empty($incomeRows)): ?>
-        <table class="table">
-          <thead><tr><th>Date</th><th>Method</th><th>Amount</th><th>Tax</th><th>Txn</th></tr></thead>
-          <tbody>
-            <?php foreach ($incomeRows as $inc): ?>
-              <tr>
-                <td><?= e($inc['payment_date']) ?></td>
-                <td><?= e($inc['payment_method']) ?></td>
-                <td><?= e((string)$inc['amount']) ?></td>
-                <td><?= e((string)$inc['tax']) ?></td>
-                <td><?= e($inc['transaction_reference'] ?? '') ?></td>
-              </tr>
-            <?php endforeach; ?>
-          </tbody>
-        </table>
-        <?php endif; ?>
-      </section>
+        <div class="col-md-6">
+          <div class="card">
+            <div class="card-header bg-white">
+              <h5 class="mb-0"><i class="fas fa-dollar-sign me-2"></i>Cost Breakdown</h5>
+            </div>
+            <div class="card-body">
+              <div class="d-flex justify-content-between mb-2">
+                <span>Labor Cost:</span>
+                <strong>$<?= number_format($jobRow['labor_cost'], 2) ?></strong>
+              </div>
+              <div class="d-flex justify-content-between mb-2">
+                <span>Parts Cost:</span>
+                <strong>$<?= number_format($jobRow['parts_cost'], 2) ?></strong>
+              </div>
+              <hr>
+              <div class="d-flex justify-content-between">
+                <strong>Total Cost:</strong>
+                <h4 class="text-primary mb-0">$<?= number_format($jobRow['total_cost'], 2) ?></h4>
+              </div>
+              <div class="mt-3">
+                <?php
+                $statusClass = 'secondary';
+                switch ($jobRow['status']) {
+                    case 'completed': $statusClass = 'success'; break;
+                    case 'in_progress': $statusClass = 'warning'; break;
+                    case 'pending': $statusClass = 'info'; break;
+                    case 'cancelled': $statusClass = 'danger'; break;
+                }
+                ?>
+                <span class="mf-badge mf-badge-<?= $statusClass ?>">
+                    <?= e(ucfirst($jobRow['status'])) ?>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Update Form -->
+      <div class="card mb-4">
+        <div class="card-header bg-white">
+          <h5 class="mb-0"><i class="fas fa-edit me-2"></i>Update Work Order</h5>
+        </div>
+        <div class="card-body">
+          <form method="post">
+            <input type="hidden" name="action" value="update" />
+            <input type="hidden" name="work_id" value="<?= e((string)$id) ?>" />
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label for="status" class="form-label">Status</label>
+                <select class="form-select" name="status" id="status">
+                  <?php foreach (['pending','in_progress','completed','cancelled'] as $st): ?>
+                    <option value="<?= $st ?>" <?= $st===$jobRow['status']?'selected':'' ?>><?= ucfirst($st) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <div class="col-md-4">
+                <label for="completion_date" class="form-label">Completion Date</label>
+                <input type="date" class="form-control" name="completion_date" id="completion_date" value="<?= e((string)$jobRow['completion_date']) ?>" />
+              </div>
+              <div class="col-md-4">
+                <label class="form-label d-block">&nbsp;</label>
+                <button type="submit" class="btn btn-primary w-100">
+                  <i class="fas fa-save me-2"></i>Save Changes
+                </button>
+              </div>
+              <div class="col-12">
+                <label for="notes" class="form-label">Notes</label>
+                <textarea class="form-control" name="notes" id="notes" rows="2"><?= e($jobRow['notes'] ?? '') ?></textarea>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Parts Section -->
+      <div class="card mb-4">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+          <h5 class="mb-0"><i class="fas fa-cogs me-2"></i>Parts Used</h5>
+          <button type="button" class="btn btn-sm btn-primary" onclick="openPartsModal(<?= (int)$id ?>)">
+            <i class="fas fa-plus me-2"></i>Add Part
+          </button>
+        </div>
+        <div class="card-body">
+          <?php if (empty($partsRows)): ?>
+            <div class="text-center py-3 text-muted">
+              <i class="fas fa-box-open fa-2x mb-2"></i>
+              <p>No parts added yet</p>
+            </div>
+          <?php else: ?>
+            <div class="table-responsive">
+              <table class="table table-hover mb-0">
+                <thead>
+                  <tr>
+                    <th>SKU</th>
+                    <th>Product Name</th>
+                    <th>Quantity</th>
+                    <th>Unit Price</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <?php foreach ($partsRows as $p): ?>
+                    <tr>
+                      <td><code><?= e($p['sku']) ?></code></td>
+                      <td><?= e($p['product_name']) ?></td>
+                      <td><?= e((string)$p['quantity']) ?></td>
+                      <td>$<?= number_format($p['unit_price'], 2) ?></td>
+                      <td><strong>$<?= number_format($p['line_total'], 2) ?></strong></td>
+                    </tr>
+                  <?php endforeach; ?>
+                </tbody>
+              </table>
+            </div>
+          <?php endif; ?>
+        </div>
+      </div>
+
+      <!-- Payments Section -->
+      <div class="card">
+        <div class="card-header bg-white">
+          <h5 class="mb-0"><i class="fas fa-receipt me-2"></i>Payment Records</h5>
+        </div>
+        <div class="card-body">
+          <?php if (empty($incomeRows)): ?>
+            <div class="text-center py-3 text-muted">
+              <i class="fas fa-cash-register fa-2x mb-2"></i>
+              <p>No payment records yet</p>
+            </div>
+          <?php else: ?>
+            <div class="table-responsive">
+              <table class="table table-hover mb-0">
+                <thead>
+                  <tr>
+                    <th>Payment Date</th>
+                    <th>Method</th>
+                    <th>Amount</th>
+                    <th>Tax</th>
+                    <th>Transaction Ref</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <?php foreach ($incomeRows as $inc): ?>
+                    <tr>
+                      <td><?= date('M d, Y', strtotime($inc['payment_date'])) ?></td>
+                      <td><?= e($inc['payment_method']) ?></td>
+                      <td>$<?= number_format($inc['amount'], 2) ?></td>
+                      <td>$<?= number_format($inc['tax'], 2) ?></td>
+                      <td><?= e($inc['transaction_reference'] ?? 'N/A') ?></td>
+                    </tr>
+                  <?php endforeach; ?>
+                </tbody>
+              </table>
+            </div>
+          <?php endif; ?>
+        </div>
+      </div>
+
+      <script>
+      // Show notifications from PHP
+      <?php if ($msg): ?>
+          showSuccess('<?= addslashes($msg) ?>');
+      <?php endif; ?>
+
+      <?php if ($err): ?>
+          showError('<?= addslashes($err) ?>');
+      <?php endif; ?>
+      </script>
     <?php endif; ?>
   <?php endif; ?>
 
-  <div id="modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); align-items:center; justify-content:center;">
-    <div style="background:#fff; padding:1rem; max-width:520px; width:95%;">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <strong>Add Part</strong>
-        <button onclick="closeModal()">X</button>
+  <!-- Parts Modal -->
+  <div class="modal fade" id="partsModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Add Part</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" id="modal-body">
+          Loading...
+        </div>
       </div>
-      <div id="modal-body" style="margin-top:.5rem">Loading...</div>
     </div>
   </div>
 
   <script>
     function openPartsModal(workId){
-      const modal = document.getElementById('modal');
+      const modal = new bootstrap.Modal(document.getElementById('partsModal'));
       const body = document.getElementById('modal-body');
-      modal.style.display='flex';
       body.textContent='Loading...';
+      modal.show();
       fetch('work_parts_add.php?work_id='+encodeURIComponent(workId))
         .then(r=>r.text()).then(html=>{ body.innerHTML = html; });
     }
-    function closeModal(){ document.getElementById('modal').style.display='none'; }
   </script>
 
-<?php require __DIR__ . '/footer.php'; ?>
+<?php require __DIR__ . '/footer_modern.php'; ?>
