@@ -30,6 +30,9 @@ try {
     $stmt = $pdo->prepare('INSERT INTO working_details (customer_id,vehicle_id,assigned_mechanic_id,service_id,status,labor_cost,parts_cost,total_cost,start_date,notes) VALUES (:c,:v,:m,:s,:st,:lc,0.00,:lc,:sd,:n)');
     $stmt->execute([':c'=>$customer_id, ':v'=>$vehicle_id, ':m'=>$mechanic_id, ':s'=>$service_id, ':st'=>$status, ':lc'=>$labor, ':sd'=>$start_date, ':n'=>$notes]);
     $msg = 'Work order created successfully';
+    // Redirect to prevent form resubmission
+    header('Location: work_orders.php?success=created');
+    exit;
   } elseif ($action === 'update') {
     $work_id = (int)($_POST['work_id'] ?? 0);
     $status = trim($_POST['status'] ?? 'pending');
@@ -42,6 +45,9 @@ try {
       createInvoiceForWork($pdo, $work_id);
     }
     $msg = 'Work order updated successfully';
+    // Redirect back to detail view
+    header('Location: work_orders.php?id='.$work_id.'&success=updated');
+    exit;
   } elseif ($action === 'delete') {
     $work_id = (int)($_POST['work_id'] ?? 0);
     
@@ -77,12 +83,32 @@ try {
       
       $pdo->commit();
       $msg = 'Work order deleted successfully and removed from records';
+      // Redirect to list view
+      header('Location: work_orders.php?success=deleted');
+      exit;
     } catch (Throwable $e) {
       $pdo->rollBack();
       throw $e;
     }
   }
-} catch (Throwable $t) { $err = $t->getMessage(); }
+} catch (Throwable $t) { 
+  $err = $t->getMessage(); 
+}
+
+// Handle success messages from redirects
+if (isset($_GET['success'])) {
+  switch ($_GET['success']) {
+    case 'created':
+      $msg = 'Work order created successfully';
+      break;
+    case 'updated':
+      $msg = 'Work order updated successfully';
+      break;
+    case 'deleted':
+      $msg = 'Work order deleted successfully and removed from records';
+      break;
+  }
+}
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
@@ -104,7 +130,63 @@ if ($id) {
   $incomeRows = $income->fetchAll(PDO::FETCH_ASSOC);
 }
 
-$list = $pdo->query('SELECT w.work_id, w.status, w.start_date, w.completion_date, w.total_cost, CONCAT(c.first_name, " ", c.last_name) AS customer, CONCAT(v.year, " ", v.make, " ", v.model) AS vehicle, s.service_name FROM working_details w JOIN customer c ON c.customer_id=w.customer_id JOIN vehicle v ON v.vehicle_id=w.vehicle_id JOIN service_details s ON s.service_id=w.service_id ORDER BY w.work_id DESC LIMIT 100')->fetchAll(PDO::FETCH_ASSOC);
+// Search functionality
+$search = trim($_GET['search'] ?? '');
+$statusFilter = trim($_GET['status_filter'] ?? '');
+$dateFrom = trim($_GET['date_from'] ?? '');
+$dateTo = trim($_GET['date_to'] ?? '');
+
+// Build WHERE clause for search
+$whereConditions = [];
+$params = [];
+
+if ($search !== '') {
+  $whereConditions[] = "(CONCAT(c.first_name, ' ', c.last_name) LIKE :search 
+                         OR CONCAT(v.year, ' ', v.make, ' ', v.model) LIKE :search 
+                         OR s.service_name LIKE :search)";
+  $params[':search'] = '%' . $search . '%';
+}
+
+if ($statusFilter !== '') {
+  $whereConditions[] = "w.status = :status";
+  $params[':status'] = $statusFilter;
+}
+
+if ($dateFrom !== '') {
+  $whereConditions[] = "w.start_date >= :date_from";
+  $params[':date_from'] = $dateFrom;
+}
+
+if ($dateTo !== '') {
+  $whereConditions[] = "w.start_date <= :date_to";
+  $params[':date_to'] = $dateTo;
+}
+
+$whereClause = '';
+if (!empty($whereConditions)) {
+  $whereClause = ' WHERE ' . implode(' AND ', $whereConditions);
+}
+
+// Build and execute query
+$sql = "SELECT w.work_id, w.status, w.start_date, w.completion_date, w.total_cost, 
+        CONCAT(c.first_name, ' ', c.last_name) AS customer, 
+        CONCAT(v.year, ' ', v.make, ' ', v.model) AS vehicle, 
+        s.service_name 
+        FROM working_details w 
+        JOIN customer c ON c.customer_id = w.customer_id 
+        JOIN vehicle v ON v.vehicle_id = w.vehicle_id 
+        JOIN service_details s ON s.service_id = w.service_id" 
+        . $whereClause . " 
+        ORDER BY w.work_id DESC 
+        LIMIT 200";
+
+if (!empty($params)) {
+  $stmt = $pdo->prepare($sql);
+  $stmt->execute($params);
+  $list = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} else {
+  $list = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+}
 
 $pageTitle = $id ? ('Work Order #'.$id) : 'Work Orders';
 $current_page = 'work_orders';
@@ -122,6 +204,67 @@ require __DIR__ . '/header_modern.php';
             <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#workOrderModal" onclick="resetForm()">
                 <i class="fas fa-plus me-2"></i>Create Work Order
             </button>
+        </div>
+    </div>
+
+    <!-- Search and Filter Section -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label for="search" class="form-label">Search</label>
+                    <input type="text" class="form-control" id="search" name="search" 
+                           placeholder="Customer, Vehicle, or Service" 
+                           value="<?= htmlspecialchars($search) ?>">
+                    <small class="text-muted">Search by customer name, vehicle, or service</small>
+                </div>
+                <div class="col-md-2">
+                    <label for="statusFilter" class="form-label">Status</label>
+                    <select class="form-select" id="statusFilter" name="status_filter">
+                        <option value="">All Statuses</option>
+                        <option value="pending" <?= $statusFilter === 'pending' ? 'selected' : '' ?>>Pending</option>
+                        <option value="in_progress" <?= $statusFilter === 'in_progress' ? 'selected' : '' ?>>In Progress</option>
+                        <option value="completed" <?= $statusFilter === 'completed' ? 'selected' : '' ?>>Completed</option>
+                        <option value="cancelled" <?= $statusFilter === 'cancelled' ? 'selected' : '' ?>>Cancelled</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="dateFrom" class="form-label">Date From</label>
+                    <input type="date" class="form-control" id="dateFrom" name="date_from" 
+                           value="<?= htmlspecialchars($dateFrom) ?>">
+                </div>
+                <div class="col-md-2">
+                    <label for="dateTo" class="form-label">Date To</label>
+                    <input type="date" class="form-control" id="dateTo" name="date_to" 
+                           value="<?= htmlspecialchars($dateTo) ?>">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label d-block">&nbsp;</label>
+                    <button type="submit" class="btn btn-primary me-2">
+                        <i class="fas fa-search me-2"></i>Search
+                    </button>
+                    <a href="work_orders.php" class="btn btn-secondary">
+                        <i class="fas fa-times me-2"></i>Clear
+                    </a>
+                </div>
+            </form>
+            <?php if ($search || $statusFilter || $dateFrom || $dateTo): ?>
+                <div class="mt-3">
+                    <small class="text-muted">
+                        <i class="fas fa-filter me-1"></i>
+                        Showing <?= count($list) ?> result(s)
+                        <?php if ($search): ?>
+                            | Search: <strong><?= htmlspecialchars($search) ?></strong>
+                        <?php endif; ?>
+                        <?php if ($statusFilter): ?>
+                            | Status: <strong><?= ucfirst($statusFilter) ?></strong>
+                        <?php endif; ?>
+                        <?php if ($dateFrom || $dateTo): ?>
+                            | Date Range: <strong><?= $dateFrom ?: 'Any' ?> to <?= $dateTo ?: 'Any' ?></strong>
+                        <?php endif; ?>
+                    </small>
+                </div>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -313,11 +456,6 @@ require __DIR__ . '/header_modern.php';
     // Show notifications from PHP
     <?php if ($msg): ?>
         showSuccess('<?= addslashes($msg) ?>');
-        // Close modal after successful creation
-        setTimeout(function() {
-            const modal = bootstrap.Modal.getInstance(document.getElementById('workOrderModal'));
-            if (modal) modal.hide();
-        }, 100);
     <?php endif; ?>
 
     <?php if ($err): ?>
