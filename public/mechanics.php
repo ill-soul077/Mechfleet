@@ -58,6 +58,27 @@ try {
   }
 } catch (Throwable $t) { $err = $t->getMessage(); }
 
+// Get sort parameter
+$sortBy = trim($_GET['sort_by'] ?? 'id_desc');
+
+// Determine ORDER BY clause
+$orderByClause = 'm.mechanic_id DESC'; // Default
+switch ($sortBy) {
+  case 'rate_asc':
+    $orderByClause = 'm.hourly_rate ASC, m.mechanic_id ASC';
+    break;
+  case 'rate_desc':
+    $orderByClause = 'm.hourly_rate DESC, m.mechanic_id DESC';
+    break;
+  case 'id_asc':
+    $orderByClause = 'm.mechanic_id ASC';
+    break;
+  case 'id_desc':
+  default:
+    $orderByClause = 'm.mechanic_id DESC';
+    break;
+}
+
 $editId = isset($_GET['edit']) ? (int)$_GET['edit'] : 0;
 $editRow = null;
 if ($editId) {
@@ -66,15 +87,15 @@ if ($editId) {
   $editRow = $st->fetch(PDO::FETCH_ASSOC);
 }
 $managers = $pdo->query('SELECT manager_id, CONCAT(first_name," ",last_name) AS name FROM manager ORDER BY manager_id')->fetchAll(PDO::FETCH_ASSOC);
-$rows = $pdo->query('
+$rows = $pdo->query("
   SELECT m.*, 
          COUNT(w.work_id) as work_count
   FROM mechanics m
   LEFT JOIN working_details w ON m.mechanic_id = w.assigned_mechanic_id
   GROUP BY m.mechanic_id
-  ORDER BY m.mechanic_id DESC 
+  ORDER BY {$orderByClause}
   LIMIT 200
-')->fetchAll(PDO::FETCH_ASSOC);
+")->fetchAll(PDO::FETCH_ASSOC);
 
 $pageTitle = 'Mechanics';
 $current_page = 'mechanics';
@@ -91,6 +112,45 @@ require __DIR__ . '/header_modern.php';
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#mechanicModal" onclick="resetForm()">
             <i class="fas fa-plus me-2"></i>Add Mechanic
         </button>
+    </div>
+</div>
+
+<!-- Sort Filter Section -->
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label for="sortBy" class="form-label">Sort By</label>
+                <select class="form-select" id="sortBy" name="sort_by" onchange="this.form.submit()">
+                    <option value="id_desc" <?= $sortBy === 'id_desc' ? 'selected' : '' ?>>ID (Newest First)</option>
+                    <option value="id_asc" <?= $sortBy === 'id_asc' ? 'selected' : '' ?>>ID (Oldest First)</option>
+                    <option value="rate_desc" <?= $sortBy === 'rate_desc' ? 'selected' : '' ?>>Hourly Rate (High to Low)</option>
+                    <option value="rate_asc" <?= $sortBy === 'rate_asc' ? 'selected' : '' ?>>Hourly Rate (Low to High)</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <a href="mechanics.php" class="btn btn-secondary w-100">
+                    <i class="fas fa-redo me-2"></i>Reset
+                </a>
+            </div>
+        </form>
+        <?php if ($sortBy !== 'id_desc'): ?>
+            <div class="mt-2">
+                <small class="text-muted">
+                    <i class="fas fa-sort me-1"></i>
+                    Sorted by: <strong>
+                        <?php
+                        switch($sortBy) {
+                            case 'rate_asc': echo 'Hourly Rate (Low to High)'; break;
+                            case 'rate_desc': echo 'Hourly Rate (High to Low)'; break;
+                            case 'id_asc': echo 'ID (Oldest First)'; break;
+                            default: echo 'ID (Newest First)'; break;
+                        }
+                        ?>
+                    </strong>
+                </small>
+            </div>
+        <?php endif; ?>
     </div>
 </div>
 
